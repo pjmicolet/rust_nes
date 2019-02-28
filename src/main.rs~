@@ -1,5 +1,0 @@
-mod romfile;
-
-fn main() {
-    romfile::print_hello();
-}

@@ -4,25 +4,25 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::io::BufReader;
 
-fn read_header( romfile: &mut [u8])
+/*
+ * Right now I don't need this code
+ */
+#[allow(dead_code)]
+fn read_header( romfile: &mut [u8]) -> [u32;2]
 {
-    if romfile[0] == 0
-    {
-        println!("OKAY");
-    }
-    else
-    {
-        println!("It was {}", romfile[0]);
-    }
+	let size_data : u32 = romfile[4] as u32;
+	let second : u32 = romfile[5] as u32;
+	let data : [u32; 2] = [ size_data * 16384, second * 8192 ];	
+	data
 }
 
-pub fn setup_fn()
+pub fn setup_fn() -> Vec<u8>
 {
-    let path = Path::new("C:/Users/Paul/Coding/Rust/rust_nes/src/smb.nes");
+    let path = Path::new("/mnt/c/Users/PJ/Coding/rust_nes/src/nestest.nes");
     let display = path.display();
 
     // Open the path in read-only mode, returns `io::Result<File>`
-    let file = match File::open(&path) {
+    let mut file = match File::open(&path) {
         // The `description` method of `io::Error` returns a string that
         // describes the error
         Err(why) => panic!("couldn't open {}: {}", display,
@@ -31,10 +31,11 @@ pub fn setup_fn()
     };
 
     // Read the file contents into a string, returns `io::Result<usize>`
-    let mut reader = BufReader::new(file);
-    let mut buf = vec![];
-    let size = reader.read_until(b'=',&mut buf).expect("Rom file could not be fully read");
-    read_header( &mut buf );
-    println!("I read a byte {}", size);
-    println!("WOAH {}",buf[1]);
+    //let mut reader = BufReader::new(file);
+    //let mut buf = vec![];
+    //let data_size = reader.read_until(b'=',&mut buf).expect("Rom file could not be fully read");
+	let mut buf = vec![];
+	let data_size = file.read_to_end(&mut buf);
+    let _info : [u32;2] = read_header( &mut buf );
+	buf[16..buf.len()].to_vec()
 }

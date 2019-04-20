@@ -93,7 +93,27 @@ pub struct CPU {
 	cycles : u64,
 }
 
+macro_rules! memAt {
+    ( $x:ident, $( $y:expr ),+ ) => {
+        {
+            let mut data = 0;
+            $(
+                data = $x.memory[ ( ( data + $y as u16 ) as usize ) ] as u16;
+             )+
+            data as u16
+        }
+    };
+}
+
+macro_rules! composeAddress {
+    ( $part_one:expr, $part_two:expr ) =>
+        {
+            ( ( $part_one as u16) << 8 ) | $part_two as u16
+        };
+}
+
 impl CPU {
+
 	pub fn new( ) -> CPU {
 		CPU {
 			regs: Regs::new(),
@@ -152,8 +172,51 @@ impl CPU {
 		println!("{}", self);
 	}
 	
-	fn dataFetch(&mut self) {
+	fn dataFetch(&mut self) -> u16 {
 		let inst_size = address_bytes[ self.pc as usize ] + 1;
+		let addressingMode = addressing_mode[ self.memory[ self.pc as usize ] as usize ];
+		match addressingMode {
+            0 => return 0,
+            1 => return memAt!( self, self.pc+1 ),
+            2 => return memAt!( self, self.pc+1, 0 ), 
+            3 => return memAt!( self, self.pc+1, self.regs.x ), 
+            4 => return memAt!( self, self.pc+1, self.regs.y ),
+            5 => { 
+                    let address = composeAddress!( memAt!( self, self.pc+1, self.regs.x + 1 ), memAt!( self, self.pc+1, self.regs.x ) );
+                    return memAt!( self, address ) 
+                 },
+            6 => {
+                    let address = composeAddress!( memAt!( self, self.pc+1, 1 ), memAt!( self, self.pc+1 ) );
+                    return memAt!( self, address )
+                 },
+            7 => {
+                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
+                    return memAt!( self, address )
+                 },
+            8 => {
+                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1, self.regs.x ) );
+                    return memAt!( self, address )
+                 },
+            9 => {
+                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1, self.regs.y ) );
+                    return memAt!( self, address )
+                 },
+            10 => {
+                    let address1 = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
+                    let address2 = composeAddress!( address1 & 0xFF00, address1 & 0x00FF );
+                    return composeAddress!( memAt!( self, address2 ), memAt!( self, address1 ) )
+                  },
+            11 => return memAt!( self, self.pc + 1 ),
+            12 => return memAt!( self, self.pc + 1 ),
+            13 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ),
+            14 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1, self.regs.x ) ),
+            15 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1, self.regs.y ) ),
+            16 => return memAt!( self, self.pc + 1, self.regs.x ),
+            17 => return memAt!( self, self.pc + 1, self.regs.y ),
+            18 => return composeAddress!( memAt!( self, self.pc +1, self.regs.x+1), memAt!( self, self.pc+1,self.regs.x ) ),
+            19 => return composeAddress!( memAt!( self, self.pc +1 ), memAt!( self, self.pc+1 ) ),
+            _ => return 0,
+		}
 	}
 }	
 

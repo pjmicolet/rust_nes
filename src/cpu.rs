@@ -54,20 +54,46 @@ static names : [&str; 256] =
   "cpx", "sbc", "nop", "isc", "cpx", "sbc", "inc", "isc", "inx", "sbc", "nop", "sbc", "cpx", "sbc", "inc", "isc",
   "beq", "sbc", "kil", "isc", "nop", "sbc", "inc", "isc", "sed", "sbc", "nop", "isc", "nop", "sbc", "inc", "isc" ];
 
+struct StatusReg {
+    carry : u8,
+    zero : u8,
+    interrupt : u8,
+    decimal : u8,
+    s1 : u8,
+    s2 : u8,
+    overflow : u8,
+    negative : u8,
+}
+
 struct Regs {
 	a : u8,
 	x : u8,
 	y : u8,
 	s : u8,
-	p : [u8; 8],
+	p : StatusReg,
 	sl : u16,
 }
 
 impl fmt::Display for Regs {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let p_flag = self.p[0] | ( self.p[1]  << 1 ) | ( self.p[2] << 2 ) | ( self.p[3] << 3 ) | (self.p[4] << 4 ) | (self.p[5] << 5) | (self.p[6] << 6) | (self.p[7] << 7 ); 
+		let p_flag = self.p.carry | ( self.p.zero  << 1 ) | ( self.p.interrupt << 2 ) | ( self.p.decimal << 3 ) | (self.p.s1 << 4 ) | (self.p.s2 << 5) | (self.p.overflow << 6) | (self.p.negative << 7 ); 
 		write!(f, "[ A: {:x}, X: {:x}, Y: {:x}, S: {:x}, P: {:x}, SL: {:x} ]", self.a, self.x, self.y, self.s, p_flag, self.sl)
 	}
+}
+
+impl StatusReg {
+    fn new() -> StatusReg {
+        StatusReg {
+            carry : 0x0,
+            zero : 0x0,
+            interrupt : 0x1,
+            decimal : 0x0,
+            s1 : 0x0,
+            s2 : 0x1,
+            overflow : 0x0,
+            negative : 0x0,
+        }
+    }
 }
 
 impl Regs {
@@ -78,7 +104,7 @@ impl Regs {
 			a:	0x0,
 			x: 	0x0,
 			y: 	0x0,
-			p: [ 0x0, 0x0, 0x1, 0x0, 0x0, 0x1, 0x0, 0x0 ]
+			p:  StatusReg::new(),
 		}
 	}
 }
@@ -112,6 +138,24 @@ macro_rules! composeAddress {
         };
 }
 
+macro_rules! isNeg {
+    ( $byte:expr ) => {
+        ( ( $byte & 0x80 ) == 0x80 ) as u8
+    };
+}
+
+macro_rules! isZer {
+    ( $bytes:expr ) => {
+        ( $bytes == 0 ) as u8
+    };
+}
+
+macro_rules! composeData {
+    ( $self:expr, $addr1:expr, $addr2:expr ) => {
+        ( $self.memory[ ( $addr1 ) as usize ] as u16 ) << 8 | $self.memory[ ( $addr2 ) as usize ] as u16
+    };
+}
+
 impl CPU {
 
 	pub fn new( ) -> CPU {
@@ -134,7 +178,6 @@ impl CPU {
 			for byte in data.iter() {
 				self.memory[ base1 + index ] = byte.clone();
 				self.memory[ base2 + index ] = *byte;
-				println!("{}",byte);
 				index = index + 1;
 			}
 		}
@@ -146,11 +189,13 @@ impl CPU {
 				self.memory[ base1 + index ] = byte.clone();
 				index = index + 1;
 			}
+            println!("{} index", index );
 		}
 		let pcPart1 : u16 = self.memory[0xFFFC] as u16;
 		let pcPart2 : u16 = self.memory[0xFFFD] as u16;
 		self.pc = ( pcPart1 | pcPart2 << 8 );
-		self.pc = 0x8000;
+		self.pc = 0xC000;
+        println!("What {:x} ", 0x8000 + data.len() );
 	}
 	
 	pub fn execute(&mut self) {
@@ -158,7 +203,7 @@ impl CPU {
 			let memIndex : usize = self.pc as usize;
 			let index : usize = self.memory[memIndex] as usize;
 			self.debugDecode();
-			self.nextPc();
+            self.stepOnce();
 		}
 	} 
 
@@ -171,9 +216,22 @@ impl CPU {
 	fn debugDecode(&mut self) {
 		println!("{}", self);
 	}
+
+    fn stepOnce(&mut self) {
+        let instruction_opcode = memAt!( self, self.pc );
+        match instruction_opcode {
+            0x4C | 0x6 => { self.jmp(); return },
+            0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(),
+            0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(),
+            0x86 | 0x96 | 0x8E => self.stx(),
+            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => self.nop(),
+            0x20 => { self.jsr(); return },
+            _ => println!("NO"),
+        }
+        self.nextPc();
+    }
 	
 	fn dataFetch(&mut self) -> u16 {
-		let inst_size = address_bytes[ self.pc as usize ] + 1;
 		let addressingMode = addressing_mode[ self.memory[ self.pc as usize ] as usize ];
 		match addressingMode {
             0 => return 0,
@@ -218,6 +276,55 @@ impl CPU {
             _ => return 0,
 		}
 	}
+
+    fn jmp( &mut self ) {
+        let pc = self.pc;
+        let address = self.dataFetch();
+        self.pc = address;
+        self.cycles += 1;
+    }
+
+    fn lda( &mut self ) {
+        let data = self.dataFetch();
+        self.regs.a = data as u8;
+        self.cycles += 2;
+    }
+
+    fn ldx( &mut self ) {
+        let data = self.dataFetch();
+        self.regs.x = data as u8;
+        self.regs.p.zero = isZer!( self.regs.x );
+        self.regs.p.negative = isNeg!( self.regs.x );
+        self.cycles += 2;
+    }
+
+    fn stx( &mut self ) {
+        let memory_address = self.dataFetch() as usize;
+        self.memory[ memory_address ] = self.regs.x;
+        self.cycles += 2;
+    }
+
+    fn jsr( &mut self ) {
+        let next_pc = self.pc + 2;
+        let current_pc = self.pc;
+        let address1 = ( 0x100 | self.regs.s as u16 ) as usize;
+        let address2 = ( 0x100 | ( self.regs.s - 1 ) as u16 ) as usize;
+        self.memory[ address1 ] = ( next_pc >> 8 ) as u8;
+        self.memory[ address2 ] = ( next_pc & 0x00FF ) as u8;
+        self.regs.s = self.regs.s - 2;
+        self.pc = composeData!( self, current_pc + 2, current_pc + 1 );
+        self.cycles += 2;
+    }
+
+    fn nop( &mut self ) {
+        self.cycles += 2;
+    }
+
+    fn sec( &mut self ) {
+        self.regs.p.carry = 1;
+        self.cycles += 2;
+    }
+
 }	
 
 impl fmt::Display for CPU {

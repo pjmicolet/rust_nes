@@ -1,5 +1,4 @@
-use std::error::Error;
-use std::fs::File;
+use std::error::Error; use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::io::BufReader;
@@ -37,5 +36,5 @@ pub fn setup_fn() -> Vec<u8>
 	let mut buf = vec![];
 	let data_size = file.read_to_end(&mut buf);
     let _info : [u32;2] = read_header( &mut buf );
-	buf[16..buf.len()].to_vec()
+	buf[16.. ( _info[0] + 16 ) as usize].to_vec()
 }

@@ -213,6 +213,25 @@ macro_rules! memAt {
     };
 }
 
+macro_rules! branchOn {
+    ( $self:ident, $reg:ident, $val:expr ) => {
+        let displacement = memAt!( $self, $self.pc + 1 );
+        if( $self.regs.p.$reg == $val )
+        { 
+            $self.cycles += 3;
+            if( ( ( displacement + 0xFF & ( $self.pc + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
+                $self.cycles += 2;
+            }
+            $self.pc += displacement + 2;
+        }
+        else
+        {
+            $self.cycles += 2;
+            $self.nextPc();
+        }
+    };
+}
+
 macro_rules! composeAddress {
     ( $part_one:expr, $part_two:expr ) =>
         {
@@ -377,12 +396,19 @@ impl CPU {
             0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(),
             0x86 | 0x96 | 0x8E => self.stx(),
             0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => self.nop(),
-            0x20 => { self.jsr(); return },
+            0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(),
+            0x24 | 0x2C => self.bit(),
             0x38 => self.sec(),
+            0x20 => { self.jsr(); return },
+            0x10 => { self.bpl(); return },
+            0x30 => { self.bmi(); return },
+            0x50 => { self.bvc(); return },
+            0x70 => { self.bvs(); return },
             0xB0 => { self.bcs(); return },
             0x90 => { self.bcc(); return },
             0xF0 => { self.beq(); return },
             0xD0 => { self.bne(); return },
+            0x60 => { self.rts(); return },
             0x18 => self.clc(),
             _ => panic!( "Hey you haven't implemented {}", name!(self)),
         }
@@ -464,6 +490,12 @@ impl CPU {
         self.cycles += 2;
     }
 
+    fn sta( &mut self ) {
+        let memory_address = self.dataFetch() as usize;
+        self.memory[ memory_address ] = self.regs.a;
+        self.cycles += 2;
+    }
+
     fn jsr( &mut self ) {
         let next_pc = self.pc + 2;
         let current_pc = self.pc;
@@ -485,78 +517,57 @@ impl CPU {
         self.cycles += 2;
     }
 
-    fn bcs( &mut self ) {
-        let displacement = memAt!( self, self.pc + 1 );
-        if( self.regs.p.carry == 1 )
-        { 
-            self.cycles += 3;
-            if( ( ( displacement + 0xFF & ( self.pc + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
-                self.cycles += 2;
-            }
-            self.pc += displacement + 2;
-        }
-        else
-        {
-            self.cycles += 2;
-            self.nextPc();
-        }
-    }
-
     fn clc( &mut self )
     {
         self.regs.p.carry = 0;
         self.cycles += 2;
     }
 
+    fn bcs( &mut self ) {
+        branchOn!( self, carry, 1 );
+    }
     fn bcc( &mut self ) {
-        let displacement = memAt!( self, self.pc + 1 );
-        if( self.regs.p.carry == 0 )
-        { 
-            self.cycles += 3;
-            if( ( ( displacement + 0xFF & ( self.pc + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
-                self.cycles += 2;
-            }
-            self.pc += displacement + 2;
-        }
-        else
-        {
-            self.cycles += 2;
-            self.nextPc();
-        }
+        branchOn!( self, carry, 0 );
     }
 
     fn beq( &mut self ) {
-        let displacement = memAt!( self, self.pc + 1 );
-        if( self.regs.p.zero == 1 )
-        { 
-            self.cycles += 3;
-            if( ( ( displacement + 0xFF & ( self.pc + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
-                self.cycles += 2;
-            }
-            self.pc += displacement + 2;
-        }
-        else
-        {
-            self.cycles += 2;
-            self.nextPc();
-        }
+        branchOn!( self, zero, 1 );
     }
 
     fn bne( &mut self ) {
-        let displacement = memAt!( self, self.pc + 1 );
-        if( self.regs.p.zero == 0 )
-        { 
-            self.cycles += 3;
-            if( ( ( displacement + 0xFF & ( self.pc + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
-                self.cycles += 2;
-            }
-            self.pc += displacement + 2;
-        }
-        else
-        {
-            self.cycles += 2;
-            self.nextPc();
-        }
+        branchOn!( self, zero, 0 );
+    }
+
+    fn bvs( &mut self ) {
+        branchOn!( self, overflow, 1 );
+    }
+
+    fn bvc( &mut self ) {
+        branchOn!( self, overflow, 0 );
+    }
+
+    fn bpl( &mut self ) {
+        branchOn!( self, negative, 0 );
+    }
+
+    fn bmi( &mut self ) {
+        branchOn!( self, negative, 1 );
+    }
+
+    fn rts( &mut self ) {
+        let pc = composeData!( self, 0x100 | ( self.regs.s + 2 ) as u16, 0x100 | ( self.regs.s + 1 ) as u16 );
+        self.pc = pc + 1;
+        self.regs.s += 2;
+        self.cycles += 6;
+    }
+
+    fn bit( &mut self ) {
+        let bit_data = self.dataFetch() as u8;
+        let a_anded = bit_data & self.regs.a;
+        self.regs.p.zero = isZer!( a_anded );
+        self.regs.p.overflow = ( ( a_anded & 0x20 ) == 0x20 ) as u8;
+        self.regs.p.negative = isNeg!( a_anded);
+        self.cycles += 2;
     }
 
 }    

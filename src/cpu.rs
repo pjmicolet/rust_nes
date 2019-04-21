@@ -41,22 +41,22 @@ static addressing_mode : [u8; 256] =
   11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8 ];
 
 static names : [&str; 256] =
-[ "brk", "ora", "kil", "slo", "nop", "ora", "asl", "slo", "php", "ora", "asl", "anc", "nop", "ora", "asl", "slo",
-  "bpl", "ora", "kil", "slo", "nop", "ora", "asl", "slo", "clc", "ora", "nop", "slo", "nop", "ora", "asl", "slo",
-  "jsr", "and", "kil", "rla", "bit", "and", "rol", "rla", "plp", "and", "rol", "anc", "bit", "and", "rol", "rla",
-  "bmi", "and", "kil", "rla", "nop", "and", "rol", "rla", "sec", "and", "nop", "rla", "nop", "and", "rol", "rla",
-  "rti", "eor", "kil", "sre", "nop", "eor", "lsr", "sre", "pha", "eor", "lsr", "alr", "jmp", "eor", "lsr", "sre",
-  "bvc", "eor", "kil", "sre", "nop", "eor", "lsr", "sre", "cli", "eor", "nop", "sre", "nop", "eor", "lsr", "sre",
-  "rts", "adc", "kil", "rra", "nop", "adc", "ror", "rra", "pla", "adc", "ror", "arr", "jmp", "adc", "ror", "rra",
-  "bvs", "adc", "kil", "rra", "nop", "adc", "ror", "rra", "sei", "adc", "nop", "rra", "nop", "adc", "ror", "rra",
-  "nop", "sta", "nop", "sax", "sty", "sta", "stx", "sax", "dey", "nop", "txa", "xaa", "sty", "sta", "stx", "sax",
-  "bcc", "sta", "kil", "ahx", "sty", "sta", "stx", "sax", "tya", "sta", "txs", "tas", "shy", "sta", "shx", "ahx",
-  "ldy", "lda", "ldx", "lax", "ldy", "lda", "ldx", "lax", "tay", "lda", "tax", "lax", "ldy", "lda", "ldx", "lax",
-  "bcs", "lda", "kil", "lax", "ldy", "lda", "ldx", "lax", "clv", "lda", "tsx", "las", "ldy", "lda", "ldx", "lax",
-  "cpy", "cmp", "nop", "dcp", "cpy", "cmp", "dec", "dcp", "iny", "cmp", "dex", "axs", "cpy", "cmp", "dec", "dcp",
-  "bne", "cmp", "kil", "dcp", "nop", "cmp", "dec", "dcp", "cld", "cmp", "nop", "dcp", "nop", "cmp", "dec", "dcp",
-  "cpx", "sbc", "nop", "isc", "cpx", "sbc", "inc", "isc", "inx", "sbc", "nop", "sbc", "cpx", "sbc", "inc", "isc",
-  "beq", "sbc", "kil", "isc", "nop", "sbc", "inc", "isc", "sed", "sbc", "nop", "isc", "nop", "sbc", "inc", "isc" ];
+[ "BRK", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "PHP", "ORA", "ASL", "ANC", "NOP", "ORA", "ASL", "SLO",
+  "BPL", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "CLC", "ORA", "NOP", "SLO", "NOP", "ORA", "ASL", "SLO",
+  "JSR", "AND", "KIL", "RLA", "BIT", "AND", "ROL", "RLA", "PLP", "AND", "ROL", "ANC", "BIT", "AND", "ROL", "RLA",
+  "BMI", "AND", "KIL", "RLA", "NOP", "AND", "ROL", "RLA", "SEC", "AND", "NOP", "RLA", "NOP", "AND", "ROL", "RLA",
+  "RTI", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE", "PHA", "EOR", "LSR", "ALR", "JMP", "EOR", "LSR", "SRE",
+  "BVC", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE", "CLI", "EOR", "NOP", "SRE", "NOP", "EOR", "LSR", "SRE",
+  "RTS", "ADC", "KIL", "RRA", "NOP", "ADC", "ROR", "RRA", "PLA", "ADC", "ROR", "ARR", "JMP", "ADC", "ROR", "RRA",
+  "BVS", "ADC", "KIL", "RRA", "NOP", "ADC", "ROR", "RRA", "SEI", "ADC", "NOP", "RRA", "NOP", "ADC", "ROR", "RRA",
+  "NOP", "STA", "NOP", "SAX", "STY", "STA", "STX", "SAX", "DEY", "NOP", "TXA", "XAA", "STY", "STA", "STX", "SAX",
+  "BCC", "STA", "KIL", "AHX", "STY", "STA", "STX", "SAX", "TYA", "STA", "TXS", "TAS", "SHY", "STA", "SHX", "AHX",
+  "LDY", "LDA", "LDX", "LAX", "LDY", "LDA", "LDX", "LAX", "TAY", "LDA", "TAX", "LAX", "LDY", "LDA", "LDX", "LAX",
+  "BCS", "LDA", "KIL", "LAX", "LDY", "LDA", "LDX", "LAX", "CLV", "LDA", "TSX", "LAS", "LDY", "LDA", "LDX", "LAX",
+  "CPY", "CMP", "NOP", "DCP", "CPY", "CMP", "DEC", "DCP", "INY", "CMP", "DEX", "AXS", "CPY", "CMP", "DEC", "DCP",
+  "BNE", "CMP", "KIL", "DCP", "NOP", "CMP", "DEC", "DCP", "CLD", "CMP", "NOP", "DCP", "NOP", "CMP", "DEC", "DCP",
+  "CPX", "SBC", "NOP", "ISC", "CPX", "SBC", "INC", "ISC", "INX", "SBC", "NOP", "SBC", "CPX", "SBC", "INC", "ISC",
+  "BEQ", "SBC", "KIL", "ISC", "NOP", "SBC", "INC", "ISC", "SED", "SBC", "NOP", "ISC", "NOP", "SBC", "INC", "ISC" ];
 
 struct StatusReg {
     carry : u8,
@@ -149,6 +149,21 @@ impl StatusReg {
     }
 }
 
+impl PartialEq for StatusReg {
+    fn eq(&self, other: &StatusReg) -> bool {
+        self.carry == other.carry &&
+            self.zero == other.zero &&
+            self.interrupt == other.interrupt &&
+            self.decimal == other.decimal &&
+            self.s1 == other.s1 &&
+            self.s2 == other.s2 &&
+            self.overflow == other.overflow &&
+            self.negative == other.negative
+    }
+}
+
+impl Eq for StatusReg {}
+
 impl Regs {
 	fn new() -> Regs {
 		Regs {
@@ -161,6 +176,18 @@ impl Regs {
 	}
 }
 
+impl PartialEq for Regs {
+    fn eq(&self, other: &Regs) -> bool {
+        self.s == other.s &&
+            self.a == other.a &&
+            self.x == other.x &&
+            self.y == other.y &&
+            self.p == other.p
+    }
+}
+
+impl Eq for Regs {}
+
 pub struct CPU {
 	pc : u16,
 	regs: Regs,
@@ -171,6 +198,7 @@ pub struct CPU {
 	cycles : u64,
 	sl : u16,
     debug_data : Vec< DebugInfo >,
+    debug_iter : usize
 }
 
 macro_rules! memAt {
@@ -219,6 +247,18 @@ macro_rules! getDebugReg {
     };
 }
 
+macro_rules! name {
+    ( $self:expr ) => {
+        names[$self.memory[ $self.pc as usize ] as usize ]
+    };
+}
+
+macro_rules! debugName {
+    ( $self:expr ) => {
+        $self.debug_data[ $self.debug_iter ].instr
+    };
+}
+
 impl CPU {
 
 	pub fn new( ) -> CPU {
@@ -231,7 +271,8 @@ impl CPU {
 			vram_buff: 0,
 			memory: [0; 0x10000],
             sl : 0,
-            debug_data : Vec::new()
+            debug_data : Vec::new(),
+            debug_iter : 0
 		}
 	}
 
@@ -293,11 +334,24 @@ impl CPU {
         Ok(())
 	}
 	
+    pub fn debugValidate( & mut self ){
+        if name!( self ) != debugName!( self ) {
+            panic!( "Hey this isn't right {} {}", name!( self ) , debugName!( self ) );
+        }
+        if self.regs != self.debug_data[ self.debug_iter ].regs {
+            panic!( "regs\n{}\n{}", self.regs, self.debug_data[ self.debug_iter].regs );
+        }
+    }
+
 	pub fn execute(&mut self) {
 		while( self.pc < 0xFFFF ) {
 			let memIndex : usize = self.pc as usize;
 			let index : usize = self.memory[memIndex] as usize;
 			self.debugDecode();
+            if self.debug_data.len() > 1 {
+                self.debugValidate();
+                self.debug_iter = self.debug_iter + 1;
+            }
             self.stepOnce();
 		}
 	} 
@@ -426,18 +480,18 @@ impl fmt::Display for CPU {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let addressingMode = addressing_mode[self.memory[ self.pc as usize ] as usize ];
 		match addressingMode {
-			0 => write!(f, "[{:x}]{} {} \t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize]),
-			1 => write!(f, "[{:x}]{} {} #{:x}\t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 1]),
-			2 | 12 => write!(f, "[{:x}]{} {} ${:x}\t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 1]),
-			3 | 16 => write!(f, "[{:x}]{} {} ${:x},X\t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 1]),
-			4 | 17 => write!(f, "[{:x}]{} {} ${:x},Y \t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 1]),
-			5 | 18 => write!(f, "[{:x}]{} {} (${:x}),X \t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 1]),
-			6 | 19 => write!(f, "[{:x}]{} {} (${:x}),Y \t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 1]),
-			7 | 13=> write!(f, "[{:x}]{} {} ${:x}{:x}\t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-			8 | 14 => write!(f, "[{:x}]{} {} {:x}{:x}, X\t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-			9 | 15 => write!(f, "[{:x}]{} {} {:x}{:x}, Y \t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-			10 => write!(f, "[{:x}]{} {} $({:x}{:x}) \t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-			11 => write!(f, "[{:x}]{} {} {:x} \t", self.pc, self.regs, names[self.memory[ self.pc as usize] as usize], self.memory[self.pc as usize + 1]),
+			0 => write!(f, "[{:x}]{} {} \t", self.pc, self.regs, name!(self)),
+			1 => write!(f, "[{:x}]{} {} #{:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+			2 | 12 => write!(f, "[{:x}]{} {} ${:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+			3 | 16 => write!(f, "[{:x}]{} {} ${:x},X\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+			4 | 17 => write!(f, "[{:x}]{} {} ${:x},Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+			5 | 18 => write!(f, "[{:x}]{} {} (${:x}),X \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+			6 | 19 => write!(f, "[{:x}]{} {} (${:x}),Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+			7 | 13=> write!(f, "[{:x}]{} {} ${:x}{:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
+			8 | 14 => write!(f, "[{:x}]{} {} {:x}{:x}, X\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
+			9 | 15 => write!(f, "[{:x}]{} {} {:x}{:x}, Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
+			10 => write!(f, "[{:x}]{} {} $({:x}{:x}) \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
+			11 => write!(f, "[{:x}]{} {} {:x} \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
 			_ => write!(f, "Specified wrong format"),
 		}
 	}

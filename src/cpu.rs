@@ -129,7 +129,7 @@ impl DebugInfo {
 
 impl fmt::Display for Regs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let p_flag = self.p.carry | ( self.p.zero  << 1 ) | ( self.p.interrupt << 2 ) | ( self.p.decimal << 3 ) | (self.p.s1 << 4 ) | (self.p.s2 << 5) | (self.p.overflow << 6) | (self.p.negative << 7 ); 
+        let p_flag = self.p.to_int(); 
         write!(f, "[ A: {:x}, X: {:x}, Y: {:x}, S: {:x}, P: {:x} ]", self.a, self.x, self.y, self.s, p_flag)
     }
 }
@@ -146,6 +146,11 @@ impl StatusReg {
             overflow : 0x0,
             negative : 0x0,
         }
+    }
+
+    pub fn to_int( &mut self ) -> u8 {
+      self.negative << 7 | self.overflow << 6 | self.s2 << 5 | self.s1 << 4 | 
+          self.decimal << 3 | self.interrupt << 2 | self.zero << 1 | self.carry 
     }
 }
 
@@ -398,7 +403,10 @@ impl CPU {
             0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => self.nop(),
             0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(),
             0x24 | 0x2C => self.bit(),
+            0x08 => self.php(),
             0x38 => self.sec(),
+            0x78 => self.sei(),
+            0xF8 => self.sed(),
             0x20 => { self.jsr(); return },
             0x10 => { self.bpl(); return },
             0x30 => { self.bmi(); return },
@@ -568,6 +576,22 @@ impl CPU {
         self.regs.p.overflow = ( ( a_anded & 0x20 ) == 0x20 ) as u8;
         self.regs.p.negative = isNeg!( a_anded);
         self.cycles += 2;
+    }
+
+    fn sei( &mut self ) {
+        self.regs.p.interrupt = 1;
+        self.cycles += 2;
+    }
+
+    fn sed( &mut self ) {
+        self.regs.p.decimal = 1;
+        self.cycles += 2;
+    }
+
+    fn php( &mut self ) {
+        let p_int = self.p.to_int();
+        self.memory[ ( 0x100 | self.regs.s ) as usize ] = ( p_int | 0x1 << 4 ) as u8;
+        self.regs.s -= 1;
     }
 
 }    

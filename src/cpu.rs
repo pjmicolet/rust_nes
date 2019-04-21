@@ -70,11 +70,11 @@ struct StatusReg {
 }
 
 struct Regs {
-	a : u8,
-	x : u8,
-	y : u8,
-	s : u8,
-	p : StatusReg,
+    a : u8,
+    x : u8,
+    y : u8,
+    s : u8,
+    p : StatusReg,
 }
 
 struct DebugInfo {
@@ -128,10 +128,10 @@ impl DebugInfo {
 }
 
 impl fmt::Display for Regs {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let p_flag = self.p.carry | ( self.p.zero  << 1 ) | ( self.p.interrupt << 2 ) | ( self.p.decimal << 3 ) | (self.p.s1 << 4 ) | (self.p.s2 << 5) | (self.p.overflow << 6) | (self.p.negative << 7 ); 
-		write!(f, "[ A: {:x}, X: {:x}, Y: {:x}, S: {:x}, P: {:x} ]", self.a, self.x, self.y, self.s, p_flag)
-	}
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let p_flag = self.p.carry | ( self.p.zero  << 1 ) | ( self.p.interrupt << 2 ) | ( self.p.decimal << 3 ) | (self.p.s1 << 4 ) | (self.p.s2 << 5) | (self.p.overflow << 6) | (self.p.negative << 7 ); 
+        write!(f, "[ A: {:x}, X: {:x}, Y: {:x}, S: {:x}, P: {:x} ]", self.a, self.x, self.y, self.s, p_flag)
+    }
 }
 
 impl StatusReg {
@@ -165,15 +165,15 @@ impl PartialEq for StatusReg {
 impl Eq for StatusReg {}
 
 impl Regs {
-	fn new() -> Regs {
-		Regs {
-			s:	0xFD,
-			a:	0x0,
-			x: 	0x0,
-			y: 	0x0,
-			p:  StatusReg::new(),
-		}
-	}
+    fn new() -> Regs {
+        Regs {
+            s:    0xFD,
+            a:    0x0,
+            x:     0x0,
+            y:     0x0,
+            p:  StatusReg::new(),
+        }
+    }
 }
 
 impl PartialEq for Regs {
@@ -189,14 +189,14 @@ impl PartialEq for Regs {
 impl Eq for Regs {}
 
 pub struct CPU {
-	pc : u16,
-	regs: Regs,
-	memory : [u8; 0x10000],
-	dma_wait : u8,
-	dma_wait_cycles : u8,
-	vram_buff : u8,
-	cycles : u64,
-	sl : u16,
+    pc : u16,
+    regs: Regs,
+    memory : [u8; 0x10000],
+    dma_wait : u8,
+    dma_wait_cycles : u8,
+    vram_buff : u8,
+    cycles : u64,
+    sl : u16,
     debug_data : Vec< DebugInfo >,
     debug_iter : usize
 }
@@ -261,46 +261,46 @@ macro_rules! debugName {
 
 impl CPU {
 
-	pub fn new( ) -> CPU {
-		CPU {
-			regs: Regs::new(),
-			pc: 0x0000,
-			cycles: 0,
-			dma_wait: 0,
-			dma_wait_cycles: 0,
-			vram_buff: 0,
-			memory: [0; 0x10000],
+    pub fn new( ) -> CPU {
+        CPU {
+            regs: Regs::new(),
+            pc: 0x0000,
+            cycles: 0,
+            dma_wait: 0,
+            dma_wait_cycles: 0,
+            vram_buff: 0,
+            memory: [0; 0x10000],
             sl : 0,
             debug_data : Vec::new(),
             debug_iter : 0
-		}
-	}
+        }
+    }
 
-	pub fn loadRom( &mut self, data : Vec<u8>, debug : bool, debug_path : &str ) -> Result<()> {
-		if data.len() == 16384  {
-			let base1 = 0x8000;
-			let base2 = 0xC000;
-			let mut index  = 0;
-			for byte in data.iter() {
-				self.memory[ base1 + index ] = byte.clone();
-				self.memory[ base2 + index ] = *byte;
-				index = index + 1;
-			}
-		}
-		else {
-			println!("{} SIZE ?",data.len());
-			let base1 = 0x8000;
-			let mut index = 0;
-			for byte in data.iter() {
-				self.memory[ base1 + index ] = byte.clone();
-				index = index + 1;
-			}
+    pub fn loadRom( &mut self, data : Vec<u8>, debug : bool, debug_path : &str ) -> Result<()> {
+        if data.len() == 16384  {
+            let base1 = 0x8000;
+            let base2 = 0xC000;
+            let mut index  = 0;
+            for byte in data.iter() {
+                self.memory[ base1 + index ] = byte.clone();
+                self.memory[ base2 + index ] = *byte;
+                index = index + 1;
+            }
+        }
+        else {
+            println!("{} SIZE ?",data.len());
+            let base1 = 0x8000;
+            let mut index = 0;
+            for byte in data.iter() {
+                self.memory[ base1 + index ] = byte.clone();
+                index = index + 1;
+            }
             println!("{} index", index );
-		}
-		let pcPart1 : u16 = self.memory[0xFFFC] as u16;
-		let pcPart2 : u16 = self.memory[0xFFFD] as u16;
-		self.pc = ( pcPart1 | pcPart2 << 8 );
-		self.pc = 0xC000;
+        }
+        let pcPart1 : u16 = self.memory[0xFFFC] as u16;
+        let pcPart2 : u16 = self.memory[0xFFFD] as u16;
+        self.pc = ( pcPart1 | pcPart2 << 8 );
+        self.pc = 0xC000;
         println!("What {:x} ", 0x8000 + data.len() );
 
         if( debug ) {
@@ -332,8 +332,8 @@ impl CPU {
             }
         }
         Ok(())
-	}
-	
+    }
+    
     pub fn debugValidate( & mut self ){
         if name!( self ) != debugName!( self ) {
             panic!( "Hey this isn't right {} {}", name!( self ) , debugName!( self ) );
@@ -343,28 +343,28 @@ impl CPU {
         }
     }
 
-	pub fn execute(&mut self) {
-		while( self.pc < 0xFFFF ) {
-			let memIndex : usize = self.pc as usize;
-			let index : usize = self.memory[memIndex] as usize;
-			self.debugDecode();
+    pub fn execute(&mut self) {
+        while( self.pc < 0xFFFF ) {
+            let memIndex : usize = self.pc as usize;
+            let index : usize = self.memory[memIndex] as usize;
+            self.debugDecode();
             if self.debug_data.len() > 1 {
                 self.debugValidate();
                 self.debug_iter = self.debug_iter + 1;
             }
             self.stepOnce();
-		}
-	} 
+        }
+    } 
 
-	fn nextPc(&mut self) {
-		let memIndex : usize = self.pc as usize;
-		let index : usize = self.memory[memIndex] as usize;
-		self.pc = self.pc + address_bytes[index] as u16 + 1;	
-	}
+    fn nextPc(&mut self) {
+        let memIndex : usize = self.pc as usize;
+        let index : usize = self.memory[memIndex] as usize;
+        self.pc = self.pc + address_bytes[index] as u16 + 1;    
+    }
 
-	fn debugDecode(&mut self) {
-		println!("{}", self);
-	}
+    fn debugDecode(&mut self) {
+        println!("{}", self);
+    }
 
     fn stepOnce(&mut self) {
         let instruction_opcode = memAt!( self, self.pc );
@@ -379,10 +379,10 @@ impl CPU {
         }
         self.nextPc();
     }
-	
-	fn dataFetch(&mut self) -> u16 {
-		let addressingMode = addressing_mode[ self.memory[ self.pc as usize ] as usize ];
-		match addressingMode {
+    
+    fn dataFetch(&mut self) -> u16 {
+        let addressingMode = addressing_mode[ self.memory[ self.pc as usize ] as usize ];
+        match addressingMode {
             0 => return 0,
             1 => return memAt!( self, self.pc+1 ),
             2 => return memAt!( self, self.pc+1, 0 ), 
@@ -423,8 +423,8 @@ impl CPU {
             18 => return composeAddress!( memAt!( self, self.pc +1, self.regs.x+1), memAt!( self, self.pc+1,self.regs.x ) ),
             19 => return composeAddress!( memAt!( self, self.pc +1 ), memAt!( self, self.pc+1 ) ),
             _ => return 0,
-		}
-	}
+        }
+    }
 
     fn jmp( &mut self ) {
         let pc = self.pc;
@@ -474,25 +474,25 @@ impl CPU {
         self.cycles += 2;
     }
 
-}	
+}    
 
 impl fmt::Display for CPU {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let addressingMode = addressing_mode[self.memory[ self.pc as usize ] as usize ];
-		match addressingMode {
-			0 => write!(f, "[{:x}]{} {} \t", self.pc, self.regs, name!(self)),
-			1 => write!(f, "[{:x}]{} {} #{:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-			2 | 12 => write!(f, "[{:x}]{} {} ${:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-			3 | 16 => write!(f, "[{:x}]{} {} ${:x},X\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-			4 | 17 => write!(f, "[{:x}]{} {} ${:x},Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-			5 | 18 => write!(f, "[{:x}]{} {} (${:x}),X \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-			6 | 19 => write!(f, "[{:x}]{} {} (${:x}),Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-			7 | 13=> write!(f, "[{:x}]{} {} ${:x}{:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-			8 | 14 => write!(f, "[{:x}]{} {} {:x}{:x}, X\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-			9 | 15 => write!(f, "[{:x}]{} {} {:x}{:x}, Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-			10 => write!(f, "[{:x}]{} {} $({:x}{:x}) \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-			11 => write!(f, "[{:x}]{} {} {:x} \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-			_ => write!(f, "Specified wrong format"),
-		}
-	}
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let addressingMode = addressing_mode[self.memory[ self.pc as usize ] as usize ];
+        match addressingMode {
+            0 => write!(f, "[{:x}]{} {} \t", self.pc, self.regs, name!(self)),
+            1 => write!(f, "[{:x}]{} {} #{:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+            2 | 12 => write!(f, "[{:x}]{} {} ${:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+            3 | 16 => write!(f, "[{:x}]{} {} ${:x},X\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+            4 | 17 => write!(f, "[{:x}]{} {} ${:x},Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+            5 | 18 => write!(f, "[{:x}]{} {} (${:x}),X \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+            6 | 19 => write!(f, "[{:x}]{} {} (${:x}),Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+            7 | 13=> write!(f, "[{:x}]{} {} ${:x}{:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
+            8 | 14 => write!(f, "[{:x}]{} {} {:x}{:x}, X\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
+            9 | 15 => write!(f, "[{:x}]{} {} {:x}{:x}, Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
+            10 => write!(f, "[{:x}]{} {} $({:x}{:x}) \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
+            11 => write!(f, "[{:x}]{} {} {:x} \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
+            _ => write!(f, "Specified wrong format"),
+        }
+    }
 }

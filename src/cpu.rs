@@ -148,7 +148,7 @@ impl StatusReg {
         }
     }
 
-    pub fn to_int( &mut self ) -> u8 {
+    pub fn to_int( & self ) -> u8 {
       self.negative << 7 | self.overflow << 6 | self.s2 << 5 | self.s1 << 4 | 
           self.decimal << 3 | self.interrupt << 2 | self.zero << 1 | self.carry 
     }
@@ -404,6 +404,7 @@ impl CPU {
             0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(),
             0x24 | 0x2C => self.bit(),
             0x08 => self.php(),
+            0x68 => self.pla(),
             0x38 => self.sec(),
             0x78 => self.sei(),
             0xF8 => self.sed(),
@@ -589,9 +590,18 @@ impl CPU {
     }
 
     fn php( &mut self ) {
-        let p_int = self.p.to_int();
-        self.memory[ ( 0x100 | self.regs.s ) as usize ] = ( p_int | 0x1 << 4 ) as u8;
+        let p_int = self.regs.p.to_int();
+        self.memory[ ( 0x100 | self.regs.s as u16 ) as usize ] = ( p_int | 0x1 << 4 ) as u8;
         self.regs.s -= 1;
+        self.cycles += 3;
+    }
+
+    fn pla( &mut self ) {
+        self.regs.a = memAt!( self, ( 0x100 | self.regs.s as u16 ) + 1 ) as u8;
+        self.regs.p.zero = isZer!( self.regs.a );
+        self.regs.p.negative = isNeg!( self.regs.a );
+        self.regs.s += 1;
+        self.cycles += 4;
     }
 
 }    

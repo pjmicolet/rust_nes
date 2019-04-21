@@ -109,8 +109,8 @@ impl DebugInfo {
         db.regs.x = new_regs[1] as u8;
         db.regs.y = new_regs[2] as u8;
 
-        for i in 0..7 {
-            p_reg[i] = ( ( new_regs[3] >> i ) & 0x1 ) as u8;
+        for i in 0..8 {
+            p_reg[i] = ( ( ( new_regs[3] >> i ) as u8 ) & 0x1 );
         }
         db.regs.p.carry = p_reg[0];
         db.regs.p.zero = p_reg[1];
@@ -336,10 +336,13 @@ impl CPU {
     
     pub fn debugValidate( & mut self ){
         if name!( self ) != debugName!( self ) {
-            panic!( "Hey this isn't right {} {}", name!( self ) , debugName!( self ) );
+            panic!( "Hey this isn't right Got: {} Expected: {}", name!( self ) , debugName!( self ) );
         }
         if self.regs != self.debug_data[ self.debug_iter ].regs {
-            panic!( "regs\n{}\n{}", self.regs, self.debug_data[ self.debug_iter].regs );
+            panic!( "regs\nGot:{:x}{}\nExpected:{:x}{}", self.pc, self.regs,self.debug_data[self.debug_iter].pc, self.debug_data[ self.debug_iter].regs );
+        }
+        if self.pc != self.debug_data[ self.debug_iter ].pc {
+            panic!( "PC is different Got: {} Expected: {}", self.pc, self.debug_data[ self.debug_iter].pc );
         }
     }
 
@@ -347,11 +350,11 @@ impl CPU {
         while( self.pc < 0xFFFF ) {
             let memIndex : usize = self.pc as usize;
             let index : usize = self.memory[memIndex] as usize;
-            self.debugDecode();
             if self.debug_data.len() > 1 {
                 self.debugValidate();
                 self.debug_iter = self.debug_iter + 1;
             }
+            self.debugDecode();
             self.stepOnce();
         }
     } 
@@ -375,7 +378,13 @@ impl CPU {
             0x86 | 0x96 | 0x8E => self.stx(),
             0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => self.nop(),
             0x20 => { self.jsr(); return },
-            _ => println!("NO"),
+            0x38 => self.sec(),
+            0xB0 => { self.bcs(); return },
+            0x90 => { self.bcc(); return },
+            0xF0 => { self.beq(); return },
+            0xD0 => { self.bne(); return },
+            0x18 => self.clc(),
+            _ => panic!( "Hey you haven't implemented {}", name!(self)),
         }
         self.nextPc();
     }
@@ -436,6 +445,8 @@ impl CPU {
     fn lda( &mut self ) {
         let data = self.dataFetch();
         self.regs.a = data as u8;
+        self.regs.p.zero = isZer!( self.regs.a );
+        self.regs.p.negative = isNeg!( self.regs.a );
         self.cycles += 2;
     }
 
@@ -472,6 +483,80 @@ impl CPU {
     fn sec( &mut self ) {
         self.regs.p.carry = 1;
         self.cycles += 2;
+    }
+
+    fn bcs( &mut self ) {
+        let displacement = memAt!( self, self.pc + 1 );
+        if( self.regs.p.carry == 1 )
+        { 
+            self.cycles += 3;
+            if( ( ( displacement + 0xFF & ( self.pc + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
+                self.cycles += 2;
+            }
+            self.pc += displacement + 2;
+        }
+        else
+        {
+            self.cycles += 2;
+            self.nextPc();
+        }
+    }
+
+    fn clc( &mut self )
+    {
+        self.regs.p.carry = 0;
+        self.cycles += 2;
+    }
+
+    fn bcc( &mut self ) {
+        let displacement = memAt!( self, self.pc + 1 );
+        if( self.regs.p.carry == 0 )
+        { 
+            self.cycles += 3;
+            if( ( ( displacement + 0xFF & ( self.pc + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
+                self.cycles += 2;
+            }
+            self.pc += displacement + 2;
+        }
+        else
+        {
+            self.cycles += 2;
+            self.nextPc();
+        }
+    }
+
+    fn beq( &mut self ) {
+        let displacement = memAt!( self, self.pc + 1 );
+        if( self.regs.p.zero == 1 )
+        { 
+            self.cycles += 3;
+            if( ( ( displacement + 0xFF & ( self.pc + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
+                self.cycles += 2;
+            }
+            self.pc += displacement + 2;
+        }
+        else
+        {
+            self.cycles += 2;
+            self.nextPc();
+        }
+    }
+
+    fn bne( &mut self ) {
+        let displacement = memAt!( self, self.pc + 1 );
+        if( self.regs.p.zero == 0 )
+        { 
+            self.cycles += 3;
+            if( ( ( displacement + 0xFF & ( self.pc + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
+                self.cycles += 2;
+            }
+            self.pc += displacement + 2;
+        }
+        else
+        {
+            self.cycles += 2;
+            self.nextPc();
+        }
     }
 
 }    

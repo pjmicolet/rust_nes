@@ -15,9 +15,9 @@ fn read_header( romfile: &mut [u8]) -> [u32;2]
 	data
 }
 
-pub fn setup_fn() -> Vec<u8>
+pub fn setup_fn( romfile : &str ) -> Vec<u8>
 {
-    let path = Path::new("/mnt/c/Users/PJ/Coding/rust_nes/src/nestest.nes");
+    let path = Path::new( romfile );
     let display = path.display();
 
     // Open the path in read-only mode, returns `io::Result<File>`

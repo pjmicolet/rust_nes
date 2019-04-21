@@ -1,4 +1,8 @@
+extern crate hex;
 use std::fmt;
+use std::path::Path;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Result};
 
 static address_bytes : [u8; 256] =
 [ 0,1,0,1,1,1,1,1,0,1,0,0,2,2,2,2,
@@ -71,13 +75,62 @@ struct Regs {
 	y : u8,
 	s : u8,
 	p : StatusReg,
-	sl : u16,
+}
+
+struct DebugInfo {
+    instr : String,
+    cycles : u64,
+    regs : Regs,
+    pc : u16,
+}
+
+impl DebugInfo {
+    fn new() -> DebugInfo {
+        DebugInfo
+        {
+            instr : String::from( "" ),
+            cycles : 0,
+            regs : Regs::new(),
+            pc : 0,
+        }
+    }
+
+    fn newArgs( new_pc : u16, new_instr : String, new_regs : Vec<u16>, new_cycles : u64 ) -> DebugInfo {
+        let mut db = DebugInfo
+        {
+            pc : new_pc,
+            instr : new_instr,
+            regs : Regs::new(),
+            cycles : new_cycles,
+        };
+
+        let mut p_reg = vec![0; 8];
+        db.regs.a = new_regs[0] as u8;
+        db.regs.x = new_regs[1] as u8;
+        db.regs.y = new_regs[2] as u8;
+
+        for i in 0..7 {
+            p_reg[i] = ( ( new_regs[3] >> i ) & 0x1 ) as u8;
+        }
+        db.regs.p.carry = p_reg[0];
+        db.regs.p.zero = p_reg[1];
+        db.regs.p.interrupt = p_reg[2];
+        db.regs.p.decimal = p_reg[3];
+        db.regs.p.s1 = p_reg[4];
+        db.regs.p.s2 = p_reg[5];
+        db.regs.p.overflow = p_reg[6];
+        db.regs.p.negative = p_reg[7];
+
+        db.regs.s = new_regs[4] as u8;
+
+        db
+    }
 }
 
 impl fmt::Display for Regs {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let p_flag = self.p.carry | ( self.p.zero  << 1 ) | ( self.p.interrupt << 2 ) | ( self.p.decimal << 3 ) | (self.p.s1 << 4 ) | (self.p.s2 << 5) | (self.p.overflow << 6) | (self.p.negative << 7 ); 
-		write!(f, "[ A: {:x}, X: {:x}, Y: {:x}, S: {:x}, P: {:x}, SL: {:x} ]", self.a, self.x, self.y, self.s, p_flag, self.sl)
+		write!(f, "[ A: {:x}, X: {:x}, Y: {:x}, S: {:x}, P: {:x} ]", self.a, self.x, self.y, self.s, p_flag)
 	}
 }
 
@@ -99,7 +152,6 @@ impl StatusReg {
 impl Regs {
 	fn new() -> Regs {
 		Regs {
-			sl: 0x0,
 			s:	0xFD,
 			a:	0x0,
 			x: 	0x0,
@@ -117,6 +169,8 @@ pub struct CPU {
 	dma_wait_cycles : u8,
 	vram_buff : u8,
 	cycles : u64,
+	sl : u16,
+    debug_data : Vec< DebugInfo >,
 }
 
 macro_rules! memAt {
@@ -156,6 +210,15 @@ macro_rules! composeData {
     };
 }
 
+macro_rules! getDebugReg {
+    ( $line:expr, $number:expr, $reg:expr ) => {
+         match hex::decode( $line[$number].split(':').collect::<Vec<_>>()[1] ) {
+                    Ok( v ) => v,
+                    Err( e ) => panic!("Messed up getting {}", $reg),
+                }[0];
+    };
+}
+
 impl CPU {
 
 	pub fn new( ) -> CPU {
@@ -167,10 +230,12 @@ impl CPU {
 			dma_wait_cycles: 0,
 			vram_buff: 0,
 			memory: [0; 0x10000],
+            sl : 0,
+            debug_data : Vec::new()
 		}
 	}
 
-	pub fn loadRom( &mut self, data : Vec<u8> ) {
+	pub fn loadRom( &mut self, data : Vec<u8>, debug : bool, debug_path : &str ) -> Result<()> {
 		if data.len() == 16384  {
 			let base1 = 0x8000;
 			let base2 = 0xC000;
@@ -196,6 +261,36 @@ impl CPU {
 		self.pc = ( pcPart1 | pcPart2 << 8 );
 		self.pc = 0xC000;
         println!("What {:x} ", 0x8000 + data.len() );
+
+        if( debug ) {
+            let path = Path::new( debug_path );
+            // Open the path in read-only mode, returns `io::Result<File>`
+            let file = File::open(path)?;
+            let mut s = String::new();
+            for line in BufReader::new( file ).lines() {
+                let newline = line?;
+                let split_line = newline.split(' ').collect::<Vec<_>>();
+                let pc_parts = match hex::decode( split_line[0] ) {
+                    Ok( v ) => v,
+                    Err( e ) => panic!("That don't work"),
+                };
+                let pc = ( pc_parts[0] as u16 ) << 8 | pc_parts[1] as u16;
+
+                let instr = String::from( split_line[1] );
+                let mut regs = vec![0 ; 5 ];
+
+                regs[0] = getDebugReg!( split_line, 2, "A" ) as u16; 
+                regs[1] = getDebugReg!( split_line, 3, "X" ) as u16;
+                regs[2] = getDebugReg!( split_line, 4, "Y" ) as u16;
+                regs[3] = getDebugReg!( split_line, 5, "P" ) as u16;
+                regs[4] = getDebugReg!( split_line, 6, "SP" ) as u16;
+                
+                let cycle = split_line[8].split(":").collect::<Vec<_>>()[1].parse::<u64>().unwrap();
+                self.debug_data.push( DebugInfo::newArgs( pc, instr, regs, cycle ) );
+
+            }
+        }
+        Ok(())
 	}
 	
 	pub fn execute(&mut self) {

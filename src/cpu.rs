@@ -1,4 +1,5 @@
 extern crate hex;
+use std::num::Wrapping;
 use std::fmt;
 use std::path::Path;
 use std::fs::File;
@@ -279,8 +280,8 @@ macro_rules! isZer {
 
 macro_rules! set_sz {
     ( $self:expr, $data:expr ) => {
-        self.regs.p.zero = isZer!( $data );
-        self.regs.p.negative = isNeg!( $data );
+        $self.regs.p.zero = isZer!( $data );
+        $self.regs.p.negative = isNeg!( $data );
     };
 }
 
@@ -312,13 +313,13 @@ macro_rules! debugName {
 }
 
 macro_rules! ovop {
-    ( $op:tt, $firstitem:expr, $( $item:expr ),+ ) =>  {
+    ( $op:tt, $type:tt, $firstitem:expr, $( $item:expr ),+ ) =>  {
         {
             let mut sum = Wrapping( $firstitem );
             $(
                 sum  $op Wrapping( $item );
              )+
-            sum.0 as u8
+            sum.0 as $type
         }
     };
 }
@@ -436,6 +437,9 @@ impl CPU {
     fn stepOnce(&mut self) {
         let instruction_opcode = memAt!( self, self.pc );
         match instruction_opcode {
+            0x08 => self.php(),
+            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(),
+            0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.cmp(),
             0x4C | 0x6 => { self.jmp(); return },
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(),
             0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(),
@@ -444,6 +448,9 @@ impl CPU {
             0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(),
             0x24 | 0x2C => self.bit(),
             0x38 => self.sec(),
+            0x68 => self.pla(),
+            0x78 => self.sei(),
+            0xF8 => self.sed(),
             0x20 => { self.jsr(); return },
             0x10 => { self.bpl(); return },
             0x30 => { self.bmi(); return },
@@ -610,10 +617,48 @@ impl CPU {
 
         set_sz!( self, a_anded );
 
-        self.regs.p.overflow = ( ( a_anded & 0x20 ) == 0x20 ) as u8;
+        self.regs.p.overflow = ( ( a_anded & 0x40 ) == 0x40 ) as u8;
         self.cycles += 2;
     }
 
+    fn sei( &mut self ) {
+        self.regs.p.interrupt = 1;
+        self.cycles += 2;
+    }
+
+    fn sed( &mut self ) {
+        self.regs.p.decimal = 1;
+        self.cycles += 2;
+    }
+
+    fn php( &mut self ) {
+        let status = self.regs.p.to_int();
+        self.memory[ ( 0x100 | self.regs.s as u16 ) as usize ] = status | 0x1 << 4;
+        self.regs.s -= 1;
+        self.cycles += 3;
+    }
+
+    fn pla( &mut self ) {
+        self.regs.a = memAt!( self, 0x100 | ( self.regs.s as u16 ) + 1 ) as u8;
+        set_sz!( self, self.regs.a );
+        self.regs.s += 1;
+        self.cycles += 4;
+    }
+
+    fn and( &mut self ) {
+        self.regs.a &= self.dataFetch() as u8;
+        set_sz!( self, self.regs.a );
+        self.cycles += 2;
+    }
+
+    fn cmp( &mut self ) {
+        let value = self.dataFetch() as u8;
+        let diff = ovop!( -=, u8, self.regs.a, value );
+        self.regs.p.carry = if self.regs.a >= value { 1 } else { 0 };
+        self.regs.p.zero = if self.regs.a == value { 1 } else { 0 };
+        self.regs.p.negative = if diff & 0x80 == 0x80 { 1 } else { 0 };
+        self.cycles += 2;
+    }
 }    
 
 impl fmt::Display for CPU {

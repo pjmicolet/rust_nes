@@ -123,7 +123,6 @@ impl DebugInfo {
         db.regs.p.negative = p_reg[7];
 
         db.regs.s = new_regs[4] as u8;
-
         db
     }
 }
@@ -267,6 +266,13 @@ macro_rules! isNeg {
 macro_rules! isZer {
     ( $bytes:expr ) => {
         ( $bytes == 0 ) as u8
+    };
+}
+
+macro_rules! set_sz {
+    ( $self:expr, $data:expr ) => {
+        $self.regs.p.zero = isZer!( $data );
+        $self.regs.p.negative = isNeg!( $data );
     };
 }
 
@@ -434,6 +440,9 @@ impl CPU {
     fn stepOnce(&mut self) {
         let instruction_opcode = memAt!( self, self.pc );
         match instruction_opcode {
+            0x08 => self.php(),
+            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(),
+            0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.cmp(),
             0x4C | 0x6 => { self.jmp(); return },
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(),
             0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(),
@@ -543,16 +552,14 @@ impl CPU {
     fn lda( &mut self ) {
         let data = self.dataFetch();
         self.regs.a = data as u8;
-        self.regs.p.zero = isZer!( self.regs.a );
-        self.regs.p.negative = isNeg!( self.regs.a );
+        set_sz!( self, self.regs.a );
         self.cycles += 2;
     }
 
     fn ldx( &mut self ) {
         let data = self.dataFetch();
         self.regs.x = data as u8;
-        self.regs.p.zero = isZer!( self.regs.x );
-        self.regs.p.negative = isNeg!( self.regs.x );
+        set_sz!( self, self.regs.x );
         self.cycles += 2;
     }
 
@@ -880,6 +887,45 @@ impl CPU {
             self.memory[ data as usize ] = shifted_data;
             self.cycles += 4;
         }
+    }
+
+    fn sei( &mut self ) {
+        self.regs.p.interrupt = 1;
+        self.cycles += 2;
+    }
+
+    fn sed( &mut self ) {
+        self.regs.p.decimal = 1;
+        self.cycles += 2;
+    }
+
+    fn php( &mut self ) {
+        let status = self.regs.p.to_int();
+        self.memory[ ( 0x100 | self.regs.s as u16 ) as usize ] = status | 0x1 << 4;
+        self.regs.s -= 1;
+        self.cycles += 3;
+    }
+
+    fn pla( &mut self ) {
+        self.regs.a = memAt!( self, 0x100 | ( self.regs.s as u16 ) + 1 ) as u8;
+        set_sz!( self, self.regs.a );
+        self.regs.s += 1;
+        self.cycles += 4;
+    }
+
+    fn and( &mut self ) {
+        self.regs.a &= self.dataFetch() as u8;
+        set_sz!( self, self.regs.a );
+        self.cycles += 2;
+    }
+
+    fn cmp( &mut self ) {
+        let value = self.dataFetch() as u8;
+        let diff = ovop!( -=, u8, self.regs.a, value );
+        self.regs.p.carry = if self.regs.a >= value { 1 } else { 0 };
+        self.regs.p.zero = if self.regs.a == value { 1 } else { 0 };
+        self.regs.p.negative = if diff & 0x80 == 0x80 { 1 } else { 0 };
+        self.cycles += 2;
     }
 }    
 

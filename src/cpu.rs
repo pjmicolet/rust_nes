@@ -1,4 +1,5 @@
 extern crate hex;
+use std::num::Wrapping;
 use std::fmt;
 use std::path::Path;
 use std::fs::File;
@@ -152,6 +153,19 @@ impl StatusReg {
       self.negative << 7 | self.overflow << 6 | self.s2 << 5 | self.s1 << 4 | 
           self.decimal << 3 | self.interrupt << 2 | self.zero << 1 | self.carry 
     }
+
+    pub fn from_int( & self, data : u8 ) -> StatusReg {
+        StatusReg {
+            carry : data & 0x1,
+            zero : ( data & 0x2 ) >> 1,
+            interrupt : ( data & 0x4 ) >> 2,
+            decimal : ( data & 0x8 ) >> 3,
+            s1 : ( data & 0x10 ) >> 4,
+            s2 : ( data & 0x20 ) >> 5,
+            overflow : ( data & 0x40 ) >> 6,
+            negative : ( data & 0x80 ) >> 7,
+        }
+    }
 }
 
 impl PartialEq for StatusReg {
@@ -283,6 +297,30 @@ macro_rules! debugName {
     };
 }
 
+macro_rules! overflow {
+    ( $data1:expr, $data2:expr, $data3:expr ) => {
+        ( !( ( $data1 ^ $data2 ) & 0x80 ) & ( ( $data1 ^ $data3 ) & 0x80 ) ) >> 7
+    }
+}
+
+macro_rules! overflowsbc {
+    ( $data1:expr, $data2:expr, $data3:expr ) => {
+        ( ( ( $data1 ^ $data2 ) & 0x80 ) & ( ( $data1 ^ $data3 ) & 0x80 ) ) >> 7
+    }
+}
+
+macro_rules! ovop {
+    ( $op:tt, $type:tt, $firstitem:expr, $( $item:expr ),+ ) =>  {
+        {
+            let mut sum = Wrapping( $firstitem );
+            $(
+                sum  $op Wrapping( $item );
+             )+
+            sum.0 as $type
+        }
+    };
+}
+
 impl CPU {
 
     pub fn new( ) -> CPU {
@@ -359,14 +397,14 @@ impl CPU {
     }
     
     pub fn debugValidate( & mut self ){
+        if self.pc != self.debug_data[ self.debug_iter ].pc {
+            panic!( "PC is different Got: {} Expected: {}", self.pc, self.debug_data[ self.debug_iter].pc );
+        }
         if name!( self ) != debugName!( self ) {
             panic!( "Hey this isn't right Got: {} Expected: {}", name!( self ) , debugName!( self ) );
         }
         if self.regs != self.debug_data[ self.debug_iter ].regs {
             panic!( "regs\nGot:{:x}{}\nExpected:{:x}{}", self.pc, self.regs,self.debug_data[self.debug_iter].pc, self.debug_data[ self.debug_iter].regs );
-        }
-        if self.pc != self.debug_data[ self.debug_iter ].pc {
-            panic!( "PC is different Got: {} Expected: {}", self.pc, self.debug_data[ self.debug_iter].pc );
         }
     }
 
@@ -399,14 +437,38 @@ impl CPU {
             0x4C | 0x6 => { self.jmp(); return },
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(),
             0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(),
+            0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(),
             0x86 | 0x96 | 0x8E => self.stx(),
             0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => self.nop(),
             0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(),
+            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(),
+            0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(),
+            0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.cmp(),
+            0xC0 | 0xC4 | 0xCC => self.cpy(),
+            0xE0 | 0xE4 | 0xEC => self.cpx(),
+            0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(),
+            0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(),
+            0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(),
+            0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(),
             0x24 | 0x2C => self.bit(),
             0x08 => self.php(),
             0x68 => self.pla(),
+            0x28 => self.plp(),
             0x38 => self.sec(),
+            0x48 => self.pha(),
             0x78 => self.sei(),
+            0x88 => self.dey(),
+            0x8A => self.txa(),
+            0x98 => self.tya(),
+            0x9A => self.txs(),
+            0xAA => self.tax(),
+            0xA8 => self.tay(),
+            0xBA => self.tsx(),
+            0xCA => self.dex(),
+            0xC8 => self.iny(),
+            0xD8 => self.cld(),
+            0xE8 => self.inx(),
+            0xB8 => self.clv(),
             0xF8 => self.sed(),
             0x20 => { self.jsr(); return },
             0x10 => { self.bpl(); return },
@@ -417,6 +479,7 @@ impl CPU {
             0x90 => { self.bcc(); return },
             0xF0 => { self.beq(); return },
             0xD0 => { self.bne(); return },
+            0x40 => { self.rti(); return },
             0x60 => { self.rts(); return },
             0x18 => self.clc(),
             _ => panic!( "Hey you haven't implemented {}", name!(self)),
@@ -493,6 +556,14 @@ impl CPU {
         self.cycles += 2;
     }
 
+    fn ldy( &mut self ) {
+        let data = self.dataFetch();
+        self.regs.y = data as u8;
+        self.regs.p.zero = isZer!( self.regs.y );
+        self.regs.p.negative = isNeg!( self.regs.y );
+        self.cycles += 2;
+    }
+
     fn stx( &mut self ) {
         let memory_address = self.dataFetch() as usize;
         self.memory[ memory_address ] = self.regs.x;
@@ -529,6 +600,17 @@ impl CPU {
     fn clc( &mut self )
     {
         self.regs.p.carry = 0;
+        self.cycles += 2;
+    }
+
+    fn clv( &mut self )
+    {
+        self.regs.p.overflow = 0;
+        self.cycles += 2;
+    }
+
+    fn cld( &mut self ) {
+        self.regs.p.decimal = 0;
         self.cycles += 2;
     }
 
@@ -574,8 +656,8 @@ impl CPU {
         let bit_data = self.dataFetch() as u8;
         let a_anded = bit_data & self.regs.a;
         self.regs.p.zero = isZer!( a_anded );
-        self.regs.p.overflow = ( ( a_anded & 0x20 ) == 0x20 ) as u8;
-        self.regs.p.negative = isNeg!( a_anded);
+        self.regs.p.overflow = ( ( bit_data & 0x40 ) == 0x40 ) as u8;
+        self.regs.p.negative = isNeg!( bit_data );
         self.cycles += 2;
     }
 
@@ -604,6 +686,201 @@ impl CPU {
         self.cycles += 4;
     }
 
+    fn pha( &mut self ) {
+        self.memory[ 0x100 | (self.regs.s as u16) as usize ] = self.regs.a;
+        self.regs.s -= 1;
+        self.cycles += 3;
+    }
+
+    fn plp( &mut self ) {
+        let data = memAt!( self, ( 0x100 | self.regs.s as u16 ) + 1 ) as u8;
+        self.regs.p = self.regs.p.from_int( data ); 
+        self.regs.p.s1 = 0;
+        self.regs.p.s2 = 1;
+        self.regs.s += 1;
+        self.cycles += 4;
+    }
+
+    fn and( &mut self ) {
+        self.regs.a &= self.dataFetch() as u8;
+        self.regs.p.zero = isZer!( self.regs.a );
+        self.regs.p.negative = isNeg!( self.regs.a );
+        self.cycles += 2;
+    }
+
+    fn adc( &mut self ) {
+        let data = self.dataFetch() as u8;
+       // let temp = data as u16 + self.regs.a as u16 + self.regs.p.carry as u16;
+        let temp = ovop!( +=, u16, data as u16 , self.regs.a as u16 , self.regs.p.carry as u16 );
+
+        self.regs.p.carry = ( 0x100 & temp == 0x100 ) as u8;
+        self.regs.p.zero = isZer!( temp & 0xFF );
+        self.regs.p.negative = isNeg!( temp );
+        self.regs.p.overflow = overflow!( self.regs.a, data, temp as u8 );
+        self.regs.a = ( temp & 0xFF ) as u8;
+        self.cycles += 2;
+    }
+
+    fn sbc( &mut self ) {
+        let data = self.dataFetch() as u8;
+        //let temp = ( ( self.regs.a as i16 - data as i16 - ( 1 - self.regs.p.carry as i16 ) ) ) as u16;
+        let temp = ovop!( -=, u16, self.regs.a as i16, data as i16, ( 1 - self.regs.p.carry as i16 ) );
+
+        self.regs.p.carry = ( 0x100 & temp != 0x100 ) as u8;
+        self.regs.p.zero = isZer!( temp & 0xFF );
+        self.regs.p.negative = isNeg!( temp );
+        self.regs.p.overflow = overflowsbc!( self.regs.a, data, temp as u8 );
+        self.regs.a = ( temp & 0xFF ) as u8;
+        self.cycles += 2;
+    }
+
+    fn ora( &mut self ) {
+        self.regs.a |= self.dataFetch() as u8;
+        self.regs.p.zero = isZer!( self.regs.a );
+        self.regs.p.negative = isNeg!( self.regs.a );
+        self.cycles += 2;
+    }
+
+    fn iny( &mut self ) {
+        self.regs.y = ovop!( +=, u8, self.regs.y, 1 );
+        self.regs.p.zero = isZer!( self.regs.y );
+        self.regs.p.negative = isNeg!( self.regs.y );
+        self.cycles += 2;
+    }
+
+    fn dey( &mut self ) {
+        self.regs.y = ovop!( -=, u8, self.regs.y, 1 );
+        self.regs.p.zero = isZer!( self.regs.y );
+        self.regs.p.negative = isNeg!( self.regs.y );
+        self.cycles += 2;
+    }
+
+    fn dex( &mut self ) {
+        self.regs.x = ovop!( -=, u8, self.regs.x, 1 );
+        self.regs.p.zero = isZer!( self.regs.x );
+        self.regs.p.negative = isNeg!( self.regs.x );
+        self.cycles += 2;
+    }
+
+    fn inx( &mut self ) {
+        self.regs.x = ovop!( +=, u8, self.regs.x, 1 );
+        self.regs.p.zero = isZer!( self.regs.x );
+        self.regs.p.negative = isNeg!( self.regs.x );
+        self.cycles += 2;
+    }
+
+    fn eor( &mut self ) {
+        self.regs.a ^= self.dataFetch() as u8;
+        self.regs.p.zero = isZer!( self.regs.a );
+        self.regs.p.negative = isNeg!( self.regs.a );
+        self.cycles += 2;
+    }
+
+    fn cmp( &mut self ) {
+        let data = self.dataFetch() as u8;
+        let compare = ( self.regs.a as i16 - data as i16 ) as u8; // this is to aovid any kind of issue with u8 overflow / undeflow
+
+        self.regs.p.carry = if self.regs.a >= data { 1 } else { 0 };
+        self.regs.p.zero = if self.regs.a == data { 1 } else { 0 };
+        self.regs.p.negative = isNeg!( compare );
+        self.cycles += 2;
+    }
+
+    fn cpy( &mut self ) {
+        let data = self.dataFetch() as u8;
+        let compare = ( self.regs.y as i16 - data as i16 ) as u8; // this is to aovid any kind of issue with u8 overflow / undeflow
+
+        self.regs.p.carry = if self.regs.y >= data { 1 } else { 0 };
+        self.regs.p.zero = if self.regs.y == data { 1 } else { 0 };
+        self.regs.p.negative = isNeg!( compare );
+        self.cycles += 2;
+    }
+
+    fn cpx( &mut self ) {
+        let data = self.dataFetch() as u8;
+        let compare = ( self.regs.x as i16 - data as i16 ) as u8; // this is to aovid any kind of issue with u8 overflow / undeflow
+
+        self.regs.p.carry = if self.regs.x >= data { 1 } else { 0 };
+        self.regs.p.zero = if self.regs.x == data { 1 } else { 0 };
+        self.regs.p.negative = isNeg!( compare );
+        self.cycles += 2;
+    }
+
+    fn tay( &mut self ) {
+        self.regs.y = self.regs.a;
+
+        self.regs.p.zero = isZer!( self.regs.y );
+        self.regs.p.negative = isNeg!( self.regs.y );
+        self.cycles += 2;
+    }
+
+    fn tya( &mut self ) {
+        self.regs.a = self.regs.y;
+
+        self.regs.p.zero = isZer!( self.regs.a );
+        self.regs.p.negative = isNeg!( self.regs.a );
+        self.cycles += 2;
+    }
+
+    fn tax( &mut self ) {
+        self.regs.x = self.regs.a;
+
+        self.regs.p.zero = isZer!( self.regs.x );
+        self.regs.p.negative = isNeg!( self.regs.x );
+        self.cycles += 2;
+    }
+
+    fn txa( &mut self ) {
+        self.regs.a = self.regs.x;
+
+        self.regs.p.zero = isZer!( self.regs.a );
+        self.regs.p.negative = isNeg!( self.regs.a );
+        self.cycles += 2;
+    }
+
+    fn tsx( &mut self ) {
+        self.regs.x = self.regs.s;
+
+        self.regs.p.zero = isZer!( self.regs.x );
+        self.regs.p.negative = isNeg!( self.regs.x );
+        self.cycles += 2;
+    }
+
+    fn txs( &mut self ) {
+        self.regs.s = self.regs.x;
+
+        self.cycles += 2;
+    }
+
+    fn rti( &mut self ) {
+        let pc = composeData!( self, 0x100 | ( self.regs.s + 3 ) as u16, 0x100 | ( self.regs.s + 2 ) as u16 );
+        self.regs.p = self.regs.p.from_int( memAt!( self, ( 0x100 | ( self.regs.s + 1 ) as u16 ) ) as u8 );
+        self.pc = pc;
+        self.regs.s += 3;
+        self.cycles += 6;
+        self.regs.p.s2 = 1;
+    }
+
+    fn lsr( &mut self ) {
+        if( memAt!( self, self.pc ) == 0x4a ) {
+            self.regs.p.carry = self.regs.a & 0x1; // check this first
+            self.regs.a = self.regs.a >> 1;
+            self.cycles += 2;
+            self.regs.p.zero = isZer!( self.regs.a );
+            self.regs.p.negative = isNeg!( self.regs.a );
+            self.cycles += 2;
+        }
+        else {
+            let data = self.dataFetch();
+            self.regs.p.carry = ( data as u8 ) & 0x1;
+
+            let shifted_data = ( data as u8 ) >> 1;
+            self.regs.p.zero = isZer!( shifted_data );
+            self.regs.p.negative = isZer!( shifted_data );
+            self.memory[ data as usize ] = shifted_data;
+            self.cycles += 4;
+        }
+    }
 }    
 
 impl fmt::Display for CPU {

@@ -122,14 +122,13 @@ impl DebugInfo {
         db.regs.p.negative = p_reg[7];
 
         db.regs.s = new_regs[4] as u8;
-
         db
     }
 }
 
 impl fmt::Display for Regs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let p_flag = self.p.carry | ( self.p.zero  << 1 ) | ( self.p.interrupt << 2 ) | ( self.p.decimal << 3 ) | (self.p.s1 << 4 ) | (self.p.s2 << 5) | (self.p.overflow << 6) | (self.p.negative << 7 ); 
+        let p_flag = self.p.to_int(); 
         write!(f, "[ A: {:x}, X: {:x}, Y: {:x}, S: {:x}, P: {:x} ]", self.a, self.x, self.y, self.s, p_flag)
     }
 }
@@ -146,6 +145,33 @@ impl StatusReg {
             overflow : 0x0,
             negative : 0x0,
         }
+    }
+
+    pub fn from_int( &self, data : u8 ) -> StatusReg {
+        StatusReg {
+            carry : data & 0x1,
+            zero  :  data & 0x2 >> 1,
+            interrupt : data & 0x4 >> 2,
+            decimal : data & 0x8 >> 3,
+            s1 : data & 0x10 >> 4,
+            s2 : data & 0x20 >> 5,
+            overflow : data & 0x40 >> 6,
+            negative : data & 0x80 >> 7
+
+        }
+    }
+
+    pub fn to_int( &self ) -> u8 {
+        let mut data = 0;
+        data |= self.carry;
+        data |= self.zero << 1;
+        data |= self.interrupt << 2;
+        data |= self.decimal << 3;
+        data |= self.s1 << 4;
+        data |= self.s2 << 5;
+        data |= self.overflow << 6;
+        data |= self.negative << 7;
+        data
     }
 }
 
@@ -251,6 +277,13 @@ macro_rules! isZer {
     };
 }
 
+macro_rules! set_sz {
+    ( $self:expr, $data:expr ) => {
+        self.regs.p.zero = isZer!( $data );
+        self.regs.p.negative = isNeg!( $data );
+    };
+}
+
 macro_rules! composeData {
     ( $self:expr, $addr1:expr, $addr2:expr ) => {
         ( $self.memory[ ( $addr1 ) as usize ] as u16 ) << 8 | $self.memory[ ( $addr2 ) as usize ] as u16
@@ -275,6 +308,18 @@ macro_rules! name {
 macro_rules! debugName {
     ( $self:expr ) => {
         $self.debug_data[ $self.debug_iter ].instr
+    };
+}
+
+macro_rules! ovop {
+    ( $op:tt, $firstitem:expr, $( $item:expr ),+ ) =>  {
+        {
+            let mut sum = Wrapping( $firstitem );
+            $(
+                sum  $op Wrapping( $item );
+             )+
+            sum.0 as u8
+        }
     };
 }
 
@@ -471,16 +516,14 @@ impl CPU {
     fn lda( &mut self ) {
         let data = self.dataFetch();
         self.regs.a = data as u8;
-        self.regs.p.zero = isZer!( self.regs.a );
-        self.regs.p.negative = isNeg!( self.regs.a );
+        set_sz!( self, self.regs.a );
         self.cycles += 2;
     }
 
     fn ldx( &mut self ) {
         let data = self.dataFetch();
         self.regs.x = data as u8;
-        self.regs.p.zero = isZer!( self.regs.x );
-        self.regs.p.negative = isNeg!( self.regs.x );
+        set_sz!( self, self.regs.x );
         self.cycles += 2;
     }
 
@@ -564,9 +607,10 @@ impl CPU {
     fn bit( &mut self ) {
         let bit_data = self.dataFetch() as u8;
         let a_anded = bit_data & self.regs.a;
-        self.regs.p.zero = isZer!( a_anded );
+
+        set_sz!( self, a_anded );
+
         self.regs.p.overflow = ( ( a_anded & 0x20 ) == 0x20 ) as u8;
-        self.regs.p.negative = isNeg!( a_anded);
         self.cycles += 2;
     }
 

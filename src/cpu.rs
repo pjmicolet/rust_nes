@@ -231,6 +231,18 @@ macro_rules! memAt {
     };
 }
 
+macro_rules! memAtZp {
+    ( $x:ident, $( $y:expr ),+ ) => {
+        {
+            let mut data = 0;
+            $(
+                data = $x.memory[ ( ( data as u8 + $y as u8 ) as usize ) ] as u16;
+             )+
+            data as u16
+        }
+    };
+}
+
 macro_rules! branchOn {
     ( $self:ident, $reg:ident, $val:expr ) => {
         let displacement = memAt!( $self, $self.pc + 1 );
@@ -456,6 +468,9 @@ impl CPU {
             0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(),
             0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(),
             0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(),
+            0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(),
+            0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(),
+            0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(),
             0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(),
             0x24 | 0x2C => self.bit(),
             0x68 => self.pla(),
@@ -502,7 +517,7 @@ impl CPU {
             3 => return memAt!( self, self.pc+1, self.regs.x ), 
             4 => return memAt!( self, self.pc+1, self.regs.y ),
             5 => { 
-                    let address = composeAddress!( memAt!( self, self.pc+1, self.regs.x + 1 ), memAt!( self, self.pc+1, self.regs.x ) );
+                    let address = composeAddress!( memAt!( self, self.pc + 1, self.regs.x + 1 ), memAt!( self, self.pc+1, self.regs.x ) );
                     return memAt!( self, address ) 
                  },
             6 => {
@@ -514,7 +529,8 @@ impl CPU {
                     return memAt!( self, address )
                  },
             8 => {
-                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1, self.regs.x ) );
+                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) ) + self.regs.x as u16 ;
+                    println!("{:x}", address );
                     return memAt!( self, address )
                  },
             9 => {
@@ -531,7 +547,7 @@ impl CPU {
             13 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ),
             14 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1, self.regs.x ) ),
             15 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1, self.regs.y ) ),
-            16 => return memAt!( self, self.pc + 1, self.regs.x ),
+            16 => return memAt!( self, self.pc + 1 ) + self.regs.x as u16,
             17 => return memAt!( self, self.pc + 1, self.regs.y ),
             18 => return composeAddress!( memAt!( self, self.pc +1, self.regs.x+1), memAt!( self, self.pc+1,self.regs.x ) ),
             19 => return composeAddress!( memAt!( self, self.pc +1 ), memAt!( self, self.pc+1 ) ),
@@ -856,6 +872,27 @@ impl CPU {
         }
     }
 
+    fn asl( &mut self ) {
+        if( memAt!( self, self.pc ) == 0x0a ) {
+            self.regs.p.carry = if ( self.regs.a & 0x80 ) == 0x80 { 1 } else { 0 }; // check this first
+            self.regs.a = self.regs.a << 1;
+            self.cycles += 2;
+            self.regs.p.zero = isZer!( self.regs.a );
+            self.regs.p.negative = isNeg!( self.regs.a );
+            self.cycles += 2;
+        }
+        else {
+            let data = self.dataFetch();
+            self.regs.p.carry = if ( ( data as u8 ) & 0x80 ) == 0x80 { 1 } else { 0 };
+
+            let shifted_data = ( data as u8 ) << 1;
+            self.regs.p.zero = isZer!( shifted_data );
+            self.regs.p.negative = isZer!( shifted_data );
+            self.memory[ data as usize ] = shifted_data;
+            self.cycles += 4;
+        }
+    }
+    
     fn sed( &mut self ) {
         self.regs.p.decimal = 1;
         self.cycles += 2;
@@ -881,6 +918,46 @@ impl CPU {
         self.regs.p.zero = if self.regs.a == value { 1 } else { 0 };
         self.regs.p.negative = if diff & 0x80 == 0x80 { 1 } else { 0 };
         self.cycles += 2;
+    }
+
+    fn ror( &mut self ) {
+        if( memAt!( self, self.pc ) == 0x6A ) {
+            let a = self.regs.a;
+            let old_p = self.regs.p.carry;
+            self.regs.p.carry = self.regs.a & 0x1;
+            self.regs.a = self.regs.a >> 1 | old_p << 7;
+            set_sz!( self, self.regs.a );
+            self.cycles += 2;
+        }
+        else {
+            let value = self.dataFetch() as u8;
+            let old_p = self.regs.p.carry;
+            self.regs.p.carry = value & 0x1;
+            let shifted_data = value >> 1 | old_p << 7;
+            set_sz!( self, shifted_data );
+            self.memory[ value as usize ] = shifted_data;
+            self.cycles += 4;
+        }
+    }
+
+    fn rol( &mut self ) {
+        if( memAt!( self, self.pc ) == 0x2A ) {
+            let a = self.regs.a;
+            let old_p = self.regs.p.carry;
+            self.regs.p.carry = if self.regs.a & 0x80 == 0x80 { 1 } else { 0 };
+            self.regs.a = self.regs.a << 1 | old_p;
+            set_sz!( self, self.regs.a );
+            self.cycles += 2;
+        }
+        else {
+            let value = self.dataFetch() as u8;
+            let old_p = self.regs.p.carry;
+            self.regs.p.carry = if value & 0x80 == 0x80 { 1 } else { 0 };
+            let shifted_data = value << 1 | old_p;
+            set_sz!( self, shifted_data );
+            self.memory[ value as usize ] = shifted_data;
+            self.cycles += 4;
+        }
     }
 }    
 

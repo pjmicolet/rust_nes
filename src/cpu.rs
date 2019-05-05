@@ -236,8 +236,8 @@ macro_rules! branchOn {
         if $self.regs.p.$reg == $val 
         { 
             $self.cycles += 3;
-            if ( ( displacement as i8 as i16 + 0xFF & ( $self.pc as i16 + 2 ) ) & 0x100 ) != 0 { // we cross page boundary 
-                $self.cycles += 2;
+            if ( ( displacement as i8 as i16 + ( 0xFF & ( $self.pc + 2 ) as i16  ) ) & 0x100 ) != 0 { // we cross page boundary 
+                $self.cycles += 1;
             }
 
             $self.pc = ( $self.pc as i16 + displacement as i8 as i16 + 2 ) as u16;
@@ -297,7 +297,7 @@ macro_rules! name {
     };
 }
 
-macro_rules! debugName {
+macro_rules! debug_name {
     ( $self:expr ) => {
         $self.debug_data[ $self.debug_iter ].instr
     };
@@ -345,6 +345,7 @@ impl CPU {
     }
 
     pub fn load_rom( &mut self, data : Vec<u8>, debug : bool, debug_path : &str ) -> Result<()> {
+        self.cycles = 7;
         if data.len() == 16384  {
             let base1 = 0x8000;
             let base2 = 0xC000;
@@ -405,11 +406,14 @@ impl CPU {
         if self.pc != self.debug_data[ self.debug_iter ].pc {
             panic!( "PC is different Got: {:x} Expected: {:x}", self.pc, self.debug_data[ self.debug_iter].pc );
         }
-        if name!( self ) != debugName!( self ) {
-            panic!( "Hey this isn't right Got: {} Expected: {}", name!( self ) , debugName!( self ) );
+        if name!( self ) != debug_name!( self ) {
+            panic!( "Hey this isn't right Got: {} Expected: {}", name!( self ) , debug_name!( self ) );
         }
         if self.regs != self.debug_data[ self.debug_iter ].regs {
             panic!( "regs\nGot:{:x}{}\nExpected:{:x}{}", self.pc, self.regs,self.debug_data[self.debug_iter].pc, self.debug_data[ self.debug_iter].regs );
+        }
+        if self.cycles != self.debug_data[ self.debug_iter].cycles {
+            panic!( "Cycles aint right {}/{}", self.cycles, self.debug_data[self.debug_iter].cycles);
         }
     }
 
@@ -431,7 +435,7 @@ impl CPU {
     }
 
     fn debug_decode(&mut self) {
-        println!("{}", self);
+        println!("{} {}", self, self.cycles);
     }
 
     fn step_once(&mut self) {
@@ -504,78 +508,91 @@ impl CPU {
         self.next_pc();
     }
     
-    fn dataFetch(&mut self, get_data : bool ) -> u16 {
+    fn data_fetch(&mut self, get_data : bool ) -> u16 {
         let addressing_mode = ADDRESSING_MODE[ self.memory[ self.pc as usize ] as usize ];
         match addressing_mode {
             0 => return 0,
             1 => return memAt!( self, self.pc+1 ),
-            2 => { if get_data { return memAt!( self, self.pc+1, 0 ) } else { return memAt!( self, self.pc+1 ) } }, 
-            3 => { if get_data { return memAtZp!( self, self.pc+1, self.regs.x ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF } }, 
-            4 => { if get_data { return memAtZp!( self, self.pc+1, self.regs.y ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF } },
+            2 => { if get_data { self.cycles += 1; return memAt!( self, self.pc+1, 0 ) } else { return memAt!( self, self.pc+1 ) } }, 
+            3 => { if get_data { self.cycles += 2; return memAtZp!( self, self.pc+1, self.regs.x ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF } }, 
+            4 => { if get_data { self.cycles += 2; return memAtZp!( self, self.pc+1, self.regs.y ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF } },
             5 => { 
                     let address = composeAddress!( memAtZp!( self, self.pc + 1, self.regs.x + 1 ), memAtZp!( self, self.pc+1, self.regs.x ) );
-                    if get_data { return memAt!( self, address ) } else { return address } 
+                    if get_data { self.cycles += 4; return memAt!( self, address ) } else { return address } 
                  },
             6 => {
                     let address = composeAddress!( memAtZp!( self, self.pc+1, 1 ), memAt!( self, self.pc+1, 0) );
                     let address2 = ovop!( +=, u16, address, self.regs.y as u16 );
-                    if get_data { return memAt!( self, address2 ) } else { return address2 }
+                    if get_data 
+                    {
+                        self.cycles += if ( memAt!(self, self.pc+1, 0) + self.regs.y as u16 ) & 0x100 == 0x100 { 4 } else { 3 };
+                        return memAt!( self, address2 ) 
+                    } else { return address2 }
                  },
             7 => {
                     let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
-                    if get_data { return memAt!( self, address ) } else { return address }
+                    if get_data { self.cycles += 2; return memAt!( self, address ) } else { return address }
                  },
             8 => {
                     let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = ovop!( +=, u16, address, self.regs.x as u16 );
-                    if get_data { return memAt!( self, address2 ) } else { return address2 }
+                    if get_data { 
+                        let shifts = memAt!(self, self.pc ) == 0x5E || memAt!(self, self.pc ) == 0x1E || memAt!( self, self.pc ) == 0x7E || memAt!(self, self.pc) == 0x3E || memAt!(self, self.pc) == 0xFE || memAt!(self, self.pc) == 0xDE || memAt!(self, self.pc) == 0xDF || memAt!(self, self.pc) == 0xFF || memAt!(self, self.pc) == 0x1F || memAt!(self, self.pc) == 0x3F || memAt!(self, self.pc) ==0x5F || memAt!(self, self.pc) == 0x7F;
+                        self.cycles += if (memAt!(self, self.pc+1) + self.regs.x as u16 ) & 0x100 == 0x100 || shifts { 3 } else { 2 };
+                        println!("{:x} {:x}", memAt!(self, self.pc + 1 ), self.regs.x );
+                        return memAt!( self, address2 )
+                    } else { return address2 }
                  },
             9 => {
                     let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = ovop!( +=, u16, address, self.regs.y as u16 );
-                    if get_data { return memAt!( self, address2 ) } else { return address2 } 
+                    if get_data {
+                        self.cycles += if (memAt!(self, self.pc+1) + self.regs.y as u16 ) & 0x100 == 0x100 { 3 } else { 2 };
+                        return memAt!( self, address2 ) 
+                    } else { return address2 } 
                  },
             10 => {
                     let address1 = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = address1 & 0xFF00 | (address1+1) & 0x00FF;
+                    self.cycles += 4;
                     return composeAddress!( memAt!( self, address2 ), memAt!( self, address1 ) )
                   },
             11 => return memAt!( self, self.pc + 1 ),
-            12 => return memAt!( self, self.pc + 1 ),
-            13 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ),
-            14 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) )  + self.regs.x as u16,
-            15 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ) + self.regs.y as u16,
-            16 => return ( memAt!( self, self.pc + 1 ) + self.regs.x as u16 ) & 0x00FF,
-            17 => return ( memAt!( self, self.pc + 1 ) + self.regs.y as u16 ) & 0x00FF,
-            18 => return composeAddress!( memAtZp!( self, self.pc +1, self.regs.x+1), memAtZp!( self, self.pc+1,self.regs.x ) ),
-            19 => return composeAddress!( memAtZp!( self, self.pc +1, 1), memAt!( self, self.pc+1, 0 ) ) + self.regs.y as u16,
+            12 => { self.cycles += 1; return memAt!( self, self.pc + 1 ) },
+            13 => { self.cycles += 2; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) )},
+            14 => { self.cycles += 3; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) )  + self.regs.x as u16 },
+            15 => { self.cycles += 3; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ) + self.regs.y as u16 },
+            16 => { self.cycles += 2; return ( memAt!( self, self.pc + 1 ) + self.regs.x as u16 ) & 0x00FF },
+            17 => { self.cycles += 2; return ( memAt!( self, self.pc + 1 ) + self.regs.y as u16 ) & 0x00FF },
+            18 => { self.cycles += 4; return composeAddress!( memAtZp!( self, self.pc +1, self.regs.x+1), memAtZp!( self, self.pc+1,self.regs.x ) ) },
+            19 => { self.cycles += 4; return composeAddress!( memAtZp!( self, self.pc +1, 1), memAt!( self, self.pc+1, 0 ) ) + self.regs.y as u16 },
             _ => return 0,
         }
     }
 
     fn jmp( &mut self ) {
         let pc = self.pc;
-        let address = self.dataFetch(true);
+        let address = self.data_fetch(true);
         self.pc = address;
         self.cycles += 1;
     }
 
     fn lda( &mut self ) {
-        let data = self.dataFetch(true);
+        let data = self.data_fetch(true);
         self.regs.a = data as u8;
         set_zn!( self, self.regs.a );
         self.cycles += 2;
     }
 
     fn ldx( &mut self ) {
-        let data = self.dataFetch(true);
+        let data = self.data_fetch(true);
         self.regs.x = data as u8;
         set_zn!( self, self.regs.x );
         self.cycles += 2;
     }
 
     fn ldy( &mut self ) {
-        let data = self.dataFetch(true);
+        let data = self.data_fetch(true);
         self.regs.y = data as u8;
         self.regs.p.zero = isZer!( self.regs.y );
         self.regs.p.negative = isNeg!( self.regs.y );
@@ -583,19 +600,19 @@ impl CPU {
     }
 
     fn stx( &mut self ) {
-        let memory_address = self.dataFetch(true) as usize;
+        let memory_address = self.data_fetch(true) as usize;
         self.memory[ memory_address ] = self.regs.x;
         self.cycles += 2;
     }
 
     fn sty( &mut self ) {
-        let memory_address = self.dataFetch(true) as usize;
+        let memory_address = self.data_fetch(true) as usize;
         self.memory[ memory_address ] = self.regs.y;
         self.cycles += 2;
     }
 
     fn sta( &mut self ) {
-        let memory_address = self.dataFetch(true) as usize;
+        let memory_address = self.data_fetch(true) as usize;
         self.memory[ memory_address ] = self.regs.a;
         self.cycles += 2;
     }
@@ -609,11 +626,21 @@ impl CPU {
         self.memory[ address2 ] = ( next_pc & 0x00FF ) as u8;
         self.regs.s = self.regs.s - 2;
         self.pc = composeData!( self, current_pc + 2, current_pc + 1 );
-        self.cycles += 2;
+        self.cycles += 6;
     }
 
     fn nop( &mut self ) {
-        self.cycles += 2;
+        let which_one = memAt!(self, self.pc);
+        match which_one {
+            0x80 | 0x82 | 0xC2 | 0xE2 | 0xEA | 0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => self.cycles += 2,
+            0x04 | 0x44 | 0x64  => self.cycles += 3,
+            0x0C | 0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4  => self.cycles += 4,
+            0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
+                self.cycles += if ( memAt!( self, self.pc+2 ) + self.regs.x as u16 ) & 0x100 == 0x100 { 1 } else { 0 };
+                self.cycles += 4
+            },
+            _ => panic!("How did I end here {:x}", which_one ),
+        }
     }
 
     fn sec( &mut self ) {
@@ -677,7 +704,7 @@ impl CPU {
     }
 
     fn bit( &mut self ) {
-        let bit_data = self.dataFetch(true) as u8;
+        let bit_data = self.data_fetch(true) as u8;
         let a_anded = bit_data & self.regs.a;
         self.regs.p.zero = isZer!( a_anded );
         self.regs.p.overflow = ( ( bit_data & 0x40 ) == 0x40 ) as u8;
@@ -713,7 +740,7 @@ impl CPU {
     }
 
     fn adc( &mut self ) {
-        let data = self.dataFetch(true) as u8;
+        let data = self.data_fetch(true) as u8;
        // let temp = data as u16 + self.regs.a as u16 + self.regs.p.carry as u16;
         let temp = ovop!( +=, u16, data as u16 , self.regs.a as u16 , self.regs.p.carry as u16 );
 
@@ -726,7 +753,7 @@ impl CPU {
     }
 
     fn sbc( &mut self ) {
-        let data = self.dataFetch(true) as u8;
+        let data = self.data_fetch(true) as u8;
         let temp = ovop!( -=, u16, self.regs.a as i16, data as i16, ( 1 - self.regs.p.carry as i16 ) );
 
         self.regs.p.carry = ( 0x100 & temp != 0x100 ) as u8;
@@ -738,7 +765,7 @@ impl CPU {
     }
 
     fn ora( &mut self ) {
-        self.regs.a |= self.dataFetch(true) as u8;
+        self.regs.a |= self.data_fetch(true) as u8;
         self.regs.p.zero = isZer!( self.regs.a );
         self.regs.p.negative = isNeg!( self.regs.a );
         self.cycles += 2;
@@ -773,14 +800,14 @@ impl CPU {
     }
 
     fn eor( &mut self ) {
-        self.regs.a ^= self.dataFetch(true) as u8;
+        self.regs.a ^= self.data_fetch(true) as u8;
         self.regs.p.zero = isZer!( self.regs.a );
         self.regs.p.negative = isNeg!( self.regs.a );
         self.cycles += 2;
     }
 
     fn cpy( &mut self ) {
-        let data = self.dataFetch(true) as u8;
+        let data = self.data_fetch(true) as u8;
         let compare = ( self.regs.y as i16 - data as i16 ) as u8; // this is to aovid any kind of issue with u8 overflow / undeflow
 
         self.regs.p.carry = if self.regs.y >= data { 1 } else { 0 };
@@ -790,7 +817,7 @@ impl CPU {
     }
 
     fn cpx( &mut self ) {
-        let data = self.dataFetch(true) as u8;
+        let data = self.data_fetch(true) as u8;
         let compare = ( self.regs.x as i16 - data as i16 ) as u8; // this is to aovid any kind of issue with u8 overflow / undeflow
 
         self.regs.p.carry = if self.regs.x >= data { 1 } else { 0 };
@@ -858,14 +885,13 @@ impl CPU {
         if memAt!( self, self.pc ) == 0x4a {
             self.regs.p.carry = self.regs.a & 0x1; // check this first
             self.regs.a = self.regs.a >> 1;
-            self.cycles += 2;
             self.regs.p.zero = isZer!( self.regs.a );
             self.regs.p.negative = isNeg!( self.regs.a );
             self.cycles += 2;
         }
         else {
-            let data = self.dataFetch(true);
-            let address = self.dataFetch(false);
+            let data = self.data_fetch(true);
+            let address = self.data_fetch(false);
             self.regs.p.carry = ( data as u8 ) & 0x1;
 
             let shifted_data = ( data as u8 ) >> 1;
@@ -882,11 +908,10 @@ impl CPU {
             self.cycles += 2;
             self.regs.p.zero = isZer!( self.regs.a );
             self.regs.p.negative = isNeg!( self.regs.a );
-            self.cycles += 2;
         }
         else {
-            let data = self.dataFetch(true);
-            let address = self.dataFetch(false);
+            let data = self.data_fetch(true);
+            let address = self.data_fetch(false);
             self.regs.p.carry = if ( ( data as u8 ) & 0x80 ) == 0x80 { 1 } else { 0 };
 
             let shifted_data = ( data as u8 ) << 1;
@@ -909,13 +934,13 @@ impl CPU {
     }
 
     fn and( &mut self ) {
-        self.regs.a &= self.dataFetch(true) as u8;
+        self.regs.a &= self.data_fetch(true) as u8;
         set_zn!( self, self.regs.a );
         self.cycles += 2;
     }
 
     fn cmp( &mut self ) {
-        let value = self.dataFetch(true) as u8;
+        let value = self.data_fetch(true) as u8;
         let diff = ovop!( -=, u8, self.regs.a, value );
         self.regs.p.carry = if self.regs.a >= value { 1 } else { 0 };
         self.regs.p.zero = if self.regs.a == value { 1 } else { 0 };
@@ -933,8 +958,8 @@ impl CPU {
             self.cycles += 2;
         }
         else {
-            let value = self.dataFetch(true) as u8;
-            let address = self.dataFetch(false);
+            let value = self.data_fetch(true) as u8;
+            let address = self.data_fetch(false);
             let old_p = self.regs.p.carry;
             self.regs.p.carry = value & 0x1;
             let shifted_data = value >> 1 | old_p << 7;
@@ -954,8 +979,8 @@ impl CPU {
             self.cycles += 2;
         }
         else {
-            let value = self.dataFetch(true) as u8;
-            let address = self.dataFetch(false) ;
+            let value = self.data_fetch(true) as u8;
+            let address = self.data_fetch(false) ;
             let old_p = self.regs.p.carry;
             self.regs.p.carry = if value & 0x80 == 0x80 { 1 } else { 0 };
             let shifted_data = value << 1 | old_p;
@@ -966,8 +991,8 @@ impl CPU {
     }
 
     fn inc( &mut self ) {
-        let mut value = self.dataFetch(true) as u8;
-        let address = self.dataFetch(false);
+        let mut value = self.data_fetch(true) as u8;
+        let address = self.data_fetch(false);
         value = ovop!( +=, u8, value, 1 );
         set_zn!( self, value );
         self.memory[ address as usize ] = value;
@@ -975,8 +1000,8 @@ impl CPU {
     }
 
     fn dec( &mut self ) {
-        let mut value = self.dataFetch(true) as u8;
-        let address = self.dataFetch(false);
+        let mut value = self.data_fetch(true) as u8;
+        let address = self.data_fetch(false);
         value = ovop!( -=, u8, value, 1 );
         set_zn!( self, value );
         self.memory[ address as usize ] = value;
@@ -984,7 +1009,7 @@ impl CPU {
     }
 
     fn lax( &mut self ) {
-        let data = self.dataFetch(true);
+        let data = self.data_fetch(true);
         set_zn!( self, data );
         self.regs.x = ( data & 0xFF ) as u8;
         self.regs.a = ( data & 0xFF ) as u8;
@@ -992,29 +1017,25 @@ impl CPU {
     }
 
     fn sax( &mut self ) {
-        let address = self.dataFetch(true);
+        let address = self.data_fetch(true);
         self.memory[ address as usize ] = self.regs.a & self.regs.x;
         self.cycles += 2;
     }
 
     fn dcp( &mut self ) {
-        let shift_val = self.dataFetch(true) as u8;
-        let address = self.dataFetch(false);
+        let shift_val = self.data_fetch(true) as u8;
+        let address = self.data_fetch(false);
         let new_val = ovop!(-=, u8, shift_val, 1 );
         self.regs.p.carry = if self.regs.a >= new_val { 1 } else { 0 };
         self.regs.p.zero = if self.regs.a == new_val { 1 } else { 0 };
         self.regs.p.negative = if self.regs.a & ( ovop!( -=, u8, self.regs.a, new_val ) ) & 0x80 == 0x80 { 1 } else { 0 };
         self.memory[ address as usize ] = new_val;
         self.cycles += 4;
-        if memAt!(self, self.pc) == 0xDF
-        {
-            self.cycles -= 1;
-        }
     }
 
     fn isc( &mut self ) {
-        let shift_val = self.dataFetch(true) as u8;
-        let address = self.dataFetch(false);
+        let shift_val = self.data_fetch(true) as u8;
+        let address = self.data_fetch(false);
         let new_val = ovop!(+=, u8, shift_val, 1 );
         let semi_carr = 1 - self.regs.p.carry;
         let temp = ovop!( -=, u16, self.regs.a as i16, new_val as i16, semi_carr as i16 );
@@ -1025,15 +1046,11 @@ impl CPU {
         self.regs.a = temp as u8;
         self.memory[ address as usize ] = new_val;
         self.cycles += 4;
-        if memAt!(self, self.pc) == 0xFF 
-        {
-            self.cycles -= 1;
-        }
     }
 
     fn slo( &mut self ) {
-        let data = self.dataFetch(true) as u8;
-        let address = self.dataFetch(false) as usize;
+        let data = self.data_fetch(true) as u8;
+        let address = self.data_fetch(false) as usize;
         self.regs.p.carry = if data & 0x80 == 0x80 { 1 } else { 0 };
         let shifted_data = data << 1;
         self.regs.a = shifted_data | self.regs.a;
@@ -1041,46 +1058,34 @@ impl CPU {
         self.regs.p.negative = if self.regs.a & 0x80 == 0x80 { 1 } else { 0 };
         self.memory[ address ] = shifted_data;
         self.cycles += 4;
-        if memAt!(self, self.pc ) == 0x1F
-        {
-            self.cycles -= 1;
-        }
     }
 
     fn rla( &mut self ) {
-        let data = self.dataFetch(true) as u8;
+        let data = self.data_fetch(true) as u8;
         let old_p = self.regs.p.carry;
-        let address = self.dataFetch(false) as usize;
+        let address = self.data_fetch(false) as usize;
         self.regs.p.carry = if data & 0x80 == 0x80 { 1 } else { 0 };
         let shifted_data = data << 1 | old_p;
         self.regs.a = self.regs.a & shifted_data;
         set_zn!(self, self.regs.a );
         self.memory[ address ] = shifted_data;
         self.cycles += 4;
-        if memAt!( self, self.pc ) == 0x3F
-        {
-            self.cycles -= 1;
-        }
     }
 
     fn sre( &mut self ) {
-        let data = self.dataFetch(true) as u8;
-        let address = self.dataFetch(false) as usize;
+        let data = self.data_fetch(true) as u8;
+        let address = self.data_fetch(false) as usize;
         self.regs.p.carry = if data & 0x1 == 0x1 { 1 } else { 0 };
         let shifted_data = data >> 1;
         self.regs.a = self.regs.a ^ shifted_data;
         set_zn!(self, self.regs.a );
         self.memory[ address ] = shifted_data;
         self.cycles += 4;
-        if memAt!( self, self.pc ) == 0x5F
-        {
-            self.cycles -= 1;
-        }
     }
 
     fn rra( &mut self ) {
-        let data = self.dataFetch(true) as u8;
-        let address = self.dataFetch(false) as usize;
+        let data = self.data_fetch(true) as u8;
+        let address = self.data_fetch(false) as usize;
         let old_p = self.regs.p.carry;
         self.regs.p.carry = if data & 0x1 == 0x1 { 1 } else { 0 };
         let shifted_data = data >> 1 | old_p << 7;
@@ -1092,11 +1097,6 @@ impl CPU {
         self.regs.a = temp as u8;
         self.memory[ address ] = shifted_data;
         self.cycles += 4;
-        if memAt!( self, self.pc ) == 0x7F
-        {
-            self.cycles -= 1;
-        }   
-
     }
 }    
 

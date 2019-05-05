@@ -240,7 +240,6 @@ macro_rules! branchOn {
                 $self.cycles += 2;
             }
 
-            println!("Hey {}",displacement as i8 as i16);
             $self.pc = ( $self.pc as i16 + displacement as i8 as i16 + 2 ) as u16;
         }
         else
@@ -597,7 +596,6 @@ impl CPU {
 
     fn sta( &mut self ) {
         let memory_address = self.dataFetch(true) as usize;
-        println!("Store {:x} in {:x}", self.regs.a, memory_address);
         self.memory[ memory_address ] = self.regs.a;
         self.cycles += 2;
     }
@@ -872,9 +870,6 @@ impl CPU {
 
             let shifted_data = ( data as u8 ) >> 1;
             set_zn!(self, shifted_data);
-            println!("Putting {:x} in {:x}", shifted_data, address );
-//            self.regs.p.zero = isZer!( shifted_data );
-//            self.regs.p.negative = isZer!( shifted_data );
             self.memory[ address as usize ] = shifted_data;
             self.cycles += 4;
         }
@@ -892,7 +887,6 @@ impl CPU {
         else {
             let data = self.dataFetch(true);
             let address = self.dataFetch(false);
-            println!("Data {:x} address {:x}",data,address);
             self.regs.p.carry = if ( ( data as u8 ) & 0x80 ) == 0x80 { 1 } else { 0 };
 
             let shifted_data = ( data as u8 ) << 1;

@@ -23,7 +23,7 @@ static address_bytes : [u8; 256] =
   1,1,0,1,1,1,1,1,0,1,0,1,2,2,2,2,
   1,1,0,1,1,1,1,1,0,2,0,2,2,2,2,2 ];
 
-static addressing_mode : [u8; 256] =
+static ADDRESSING_MODE : [u8; 256] =
 [ 0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
   7, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
   0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 13, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
@@ -33,7 +33,7 @@ static addressing_mode : [u8; 256] =
   1, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
   1, 5, 1, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8 ];
 
-static names : [&str; 256] =
+static NAMES : [&str; 256] =
 [ "BRK", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "PHP", "ORA", "ASL", "ANC", "NOP", "ORA", "ASL", "SLO", "BPL", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "CLC", "ORA", "NOP", "SLO", "NOP", "ORA", "ASL", "SLO",
 "JSR", "AND", "KIL", "RLA", "BIT", "AND", "ROL", "RLA", "PLP", "AND", "ROL", "ANC", "BIT", "AND", "ROL", "RLA", "BMI", "AND", "KIL", "RLA", "NOP", "AND", "ROL", "RLA", "SEC", "AND", "NOP", "RLA", "NOP", "AND", "ROL", "RLA",
 "RTI", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE", "PHA", "EOR", "LSR", "ALR", "JMP", "EOR", "LSR", "SRE", "BVC", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE", "CLI", "EOR", "NOP", "SRE", "NOP", "EOR", "LSR", "SRE",
@@ -80,7 +80,7 @@ impl DebugInfo {
         }
     }
 
-    fn newArgs( new_pc : u16, new_instr : String, new_regs : Vec<u16>, new_cycles : u64 ) -> DebugInfo {
+    fn new_args( new_pc : u16, new_instr : String, new_regs : Vec<u16>, new_cycles : u64 ) -> DebugInfo {
         let mut db = DebugInfo
         {
             pc : new_pc,
@@ -95,7 +95,7 @@ impl DebugInfo {
         db.regs.y = new_regs[2] as u8;
 
         for i in 0..8 {
-            p_reg[i] = ( ( ( new_regs[3] >> i ) as u8 ) & 0x1 );
+            p_reg[i] = ( ( new_regs[3] >> i ) as u8 ) & 0x1;
         }
         db.regs.p.carry = p_reg[0];
         db.regs.p.zero = p_reg[1];
@@ -233,10 +233,10 @@ macro_rules! memAtZp {
 macro_rules! branchOn {
     ( $self:ident, $reg:ident, $val:expr ) => {
         let displacement = memAt!( $self, $self.pc + 1 ) as u8;
-        if( $self.regs.p.$reg == $val )
+        if $self.regs.p.$reg == $val 
         { 
             $self.cycles += 3;
-            if( ( ( displacement as i8 as i16 + 0xFF & ( $self.pc as i16 + 2 ) ) & 0x100 ) != 0 ) { // we cross page boundary 
+            if ( ( displacement as i8 as i16 + 0xFF & ( $self.pc as i16 + 2 ) ) & 0x100 ) != 0 { // we cross page boundary 
                 $self.cycles += 2;
             }
 
@@ -246,7 +246,7 @@ macro_rules! branchOn {
         else
         {
             $self.cycles += 2;
-            $self.nextPc();
+            $self.next_pc();
         }
     };
 }
@@ -270,7 +270,7 @@ macro_rules! isZer {
     };
 }
 
-macro_rules! set_sz {
+macro_rules! set_zn {
     ( $self:expr, $data:expr ) => {
         $self.regs.p.zero = isZer!( $data );
         $self.regs.p.negative = isNeg!( $data );
@@ -294,7 +294,7 @@ macro_rules! getDebugReg {
 
 macro_rules! name {
     ( $self:expr ) => {
-        names[$self.memory[ $self.pc as usize ] as usize ]
+        NAMES[$self.memory[ $self.pc as usize ] as usize ]
     };
 }
 
@@ -345,7 +345,7 @@ impl CPU {
         }
     }
 
-    pub fn loadRom( &mut self, data : Vec<u8>, debug : bool, debug_path : &str ) -> Result<()> {
+    pub fn load_rom( &mut self, data : Vec<u8>, debug : bool, debug_path : &str ) -> Result<()> {
         if data.len() == 16384  {
             let base1 = 0x8000;
             let base2 = 0xC000;
@@ -368,15 +368,14 @@ impl CPU {
         }
         let pcPart1 : u16 = self.memory[0xFFFC] as u16;
         let pcPart2 : u16 = self.memory[0xFFFD] as u16;
-        self.pc = ( pcPart1 | pcPart2 << 8 );
+        self.pc = pcPart1 | pcPart2 << 8;
         self.pc = 0xC000;
         println!("What {:x} ", 0x8000 + data.len() );
 
-        if( debug ) {
+        if debug {
             let path = Path::new( debug_path );
             // Open the path in read-only mode, returns `io::Result<File>`
             let file = File::open(path)?;
-            let mut s = String::new();
             for line in BufReader::new( file ).lines() {
                 let newline = line?;
                 let split_line = newline.split(' ').collect::<Vec<_>>();
@@ -396,7 +395,7 @@ impl CPU {
                 regs[4] = getDebugReg!( split_line, 6, "SP" ) as u16;
                 
                 let cycle = split_line[8].split(":").collect::<Vec<_>>()[1].parse::<u64>().unwrap();
-                self.debug_data.push( DebugInfo::newArgs( pc, instr, regs, cycle ) );
+                self.debug_data.push( DebugInfo::new_args( pc, instr, regs, cycle ) );
 
             }
         }
@@ -417,28 +416,26 @@ impl CPU {
 
     pub fn execute(&mut self) {
         while( self.pc < 0xFFFF ) {
-            let memIndex : usize = self.pc as usize;
-            let index : usize = self.memory[memIndex] as usize;
             if self.debug_data.len() > 1 {
                 self.debugValidate();
                 self.debug_iter = self.debug_iter + 1;
             }
-            self.debugDecode();
-            self.stepOnce();
+            self.debug_decode();
+            self.step_once();
         }
     } 
 
-    fn nextPc(&mut self) {
-        let memIndex : usize = self.pc as usize;
-        let index : usize = self.memory[memIndex] as usize;
+    fn next_pc(&mut self) {
+        let mem_index : usize = self.pc as usize;
+        let index : usize = self.memory[mem_index] as usize;
         self.pc = self.pc + address_bytes[index] as u16 + 1;    
     }
 
-    fn debugDecode(&mut self) {
+    fn debug_decode(&mut self) {
         println!("{}", self);
     }
 
-    fn stepOnce(&mut self) {
+    fn step_once(&mut self) {
         let instruction_opcode = memAt!( self, self.pc );
         match instruction_opcode {
             0x08 => self.php(),
@@ -505,12 +502,12 @@ impl CPU {
             0x18 => self.clc(),
             _ => panic!( "Hey you haven't implemented {}", name!(self)),
         }
-        self.nextPc();
+        self.next_pc();
     }
     
     fn dataFetch(&mut self, get_data : bool ) -> u16 {
-        let addressingMode = addressing_mode[ self.memory[ self.pc as usize ] as usize ];
-        match addressingMode {
+        let addressing_mode = ADDRESSING_MODE[ self.memory[ self.pc as usize ] as usize ];
+        match addressing_mode {
             0 => return 0,
             1 => return memAt!( self, self.pc+1 ),
             2 => { if get_data { return memAt!( self, self.pc+1, 0 ) } else { return memAt!( self, self.pc+1 ) } }, 
@@ -567,14 +564,14 @@ impl CPU {
     fn lda( &mut self ) {
         let data = self.dataFetch(true);
         self.regs.a = data as u8;
-        set_sz!( self, self.regs.a );
+        set_zn!( self, self.regs.a );
         self.cycles += 2;
     }
 
     fn ldx( &mut self ) {
         let data = self.dataFetch(true);
         self.regs.x = data as u8;
-        set_sz!( self, self.regs.x );
+        set_zn!( self, self.regs.x );
         self.cycles += 2;
     }
 
@@ -732,7 +729,6 @@ impl CPU {
 
     fn sbc( &mut self ) {
         let data = self.dataFetch(true) as u8;
-        //let temp = ( ( self.regs.a as i16 - data as i16 - ( 1 - self.regs.p.carry as i16 ) ) ) as u16;
         let temp = ovop!( -=, u16, self.regs.a as i16, data as i16, ( 1 - self.regs.p.carry as i16 ) );
 
         self.regs.p.carry = ( 0x100 & temp != 0x100 ) as u8;
@@ -861,7 +857,7 @@ impl CPU {
     }
 
     fn lsr( &mut self ) {
-        if( memAt!( self, self.pc ) == 0x4a ) {
+        if memAt!( self, self.pc ) == 0x4a {
             self.regs.p.carry = self.regs.a & 0x1; // check this first
             self.regs.a = self.regs.a >> 1;
             self.cycles += 2;
@@ -875,7 +871,7 @@ impl CPU {
             self.regs.p.carry = ( data as u8 ) & 0x1;
 
             let shifted_data = ( data as u8 ) >> 1;
-            set_sz!(self, shifted_data);
+            set_zn!(self, shifted_data);
             println!("Putting {:x} in {:x}", shifted_data, address );
 //            self.regs.p.zero = isZer!( shifted_data );
 //            self.regs.p.negative = isZer!( shifted_data );
@@ -885,7 +881,7 @@ impl CPU {
     }
 
     fn asl( &mut self ) {
-        if( memAt!( self, self.pc ) == 0x0a ) {
+        if memAt!( self, self.pc ) == 0x0a {
             self.regs.p.carry = if ( self.regs.a & 0x80 ) == 0x80 { 1 } else { 0 }; // check this first
             self.regs.a = self.regs.a << 1;
             self.cycles += 2;
@@ -900,7 +896,7 @@ impl CPU {
             self.regs.p.carry = if ( ( data as u8 ) & 0x80 ) == 0x80 { 1 } else { 0 };
 
             let shifted_data = ( data as u8 ) << 1;
-            set_sz!(self, shifted_data );
+            set_zn!(self, shifted_data );
             self.memory[ address as usize ] = shifted_data;
             self.cycles += 4;
         }
@@ -913,14 +909,14 @@ impl CPU {
 
     fn pla( &mut self ) {
         self.regs.a = memAt!( self, 0x100 | ( self.regs.s as u16 ) + 1 ) as u8;
-        set_sz!( self, self.regs.a );
+        set_zn!( self, self.regs.a );
         self.regs.s += 1;
         self.cycles += 4;
     }
 
     fn and( &mut self ) {
         self.regs.a &= self.dataFetch(true) as u8;
-        set_sz!( self, self.regs.a );
+        set_zn!( self, self.regs.a );
         self.cycles += 2;
     }
 
@@ -934,12 +930,12 @@ impl CPU {
     }
 
     fn ror( &mut self ) {
-        if( memAt!( self, self.pc ) == 0x6A ) {
+        if memAt!( self, self.pc ) == 0x6A {
             let a = self.regs.a;
             let old_p = self.regs.p.carry;
             self.regs.p.carry = self.regs.a & 0x1;
             self.regs.a = self.regs.a >> 1 | old_p << 7;
-            set_sz!( self, self.regs.a );
+            set_zn!( self, self.regs.a );
             self.cycles += 2;
         }
         else {
@@ -948,19 +944,19 @@ impl CPU {
             let old_p = self.regs.p.carry;
             self.regs.p.carry = value & 0x1;
             let shifted_data = value >> 1 | old_p << 7;
-            set_sz!( self, shifted_data );
+            set_zn!( self, shifted_data );
             self.memory[ address as usize ] = shifted_data;
             self.cycles += 4;
         }
     }
 
     fn rol( &mut self ) {
-        if( memAt!( self, self.pc ) == 0x2A ) {
+        if memAt!( self, self.pc ) == 0x2A {
             let a = self.regs.a;
             let old_p = self.regs.p.carry;
             self.regs.p.carry = if self.regs.a & 0x80 == 0x80 { 1 } else { 0 };
             self.regs.a = self.regs.a << 1 | old_p;
-            set_sz!( self, self.regs.a );
+            set_zn!( self, self.regs.a );
             self.cycles += 2;
         }
         else {
@@ -969,7 +965,7 @@ impl CPU {
             let old_p = self.regs.p.carry;
             self.regs.p.carry = if value & 0x80 == 0x80 { 1 } else { 0 };
             let shifted_data = value << 1 | old_p;
-            set_sz!( self, shifted_data );
+            set_zn!( self, shifted_data );
             self.memory[ address as usize ] = shifted_data;
             self.cycles += 4;
         }
@@ -978,9 +974,8 @@ impl CPU {
     fn inc( &mut self ) {
         let mut value = self.dataFetch(true) as u8;
         let address = self.dataFetch(false);
-        let old_c = self.regs.p.carry;
         value = ovop!( +=, u8, value, 1 );
-        set_sz!( self, value );
+        set_zn!( self, value );
         self.memory[ address as usize ] = value;
         self.cycles += 4;
     }
@@ -988,16 +983,15 @@ impl CPU {
     fn dec( &mut self ) {
         let mut value = self.dataFetch(true) as u8;
         let address = self.dataFetch(false);
-        let old_c = self.regs.p.carry;
         value = ovop!( -=, u8, value, 1 );
-        set_sz!( self, value );
+        set_zn!( self, value );
         self.memory[ address as usize ] = value;
         self.cycles += 4;
     }
 
     fn lax( &mut self ) {
         let data = self.dataFetch(true);
-        set_sz!( self, data );
+        set_zn!( self, data );
         self.regs.x = ( data & 0xFF ) as u8;
         self.regs.a = ( data & 0xFF ) as u8;
         self.cycles += 2;
@@ -1012,11 +1006,10 @@ impl CPU {
     fn dcp( &mut self ) {
         let shift_val = self.dataFetch(true) as u8;
         let address = self.dataFetch(false);
-        let old_p = self.regs.p.carry;
         let new_val = ovop!(-=, u8, shift_val, 1 );
         self.regs.p.carry = if self.regs.a >= new_val { 1 } else { 0 };
         self.regs.p.zero = if self.regs.a == new_val { 1 } else { 0 };
-        self.regs.p.negative = if ( self.regs.a & ( ovop!( -=, u8, self.regs.a, new_val ) ) & 0x80 == 0x80 ) { 1 } else { 0 };
+        self.regs.p.negative = if self.regs.a & ( ovop!( -=, u8, self.regs.a, new_val ) ) & 0x80 == 0x80 { 1 } else { 0 };
         self.memory[ address as usize ] = new_val;
         self.cycles += 4;
         if memAt!(self, self.pc) == 0xDF
@@ -1031,12 +1024,10 @@ impl CPU {
         let new_val = ovop!(+=, u8, shift_val, 1 );
         let semi_carr = 1 - self.regs.p.carry;
         let temp = ovop!( -=, u16, self.regs.a as i16, new_val as i16, semi_carr as i16 );
-        println!("HEYHEYHEY {:x} {:x} {:x} {:x}", temp, shift_val, new_val, temp);
-
-        self.regs.p.zero = if( temp & 0xFF == 0 ) { 1 } else { 0 };
-        self.regs.p.negative = if( temp & 0x80 == 0x80 ) { 1 } else { 0 };
+        self.regs.p.zero = if temp & 0xFF == 0 { 1 } else { 0 };
+        self.regs.p.negative = if temp & 0x80 == 0x80 { 1 } else { 0 };
         self.regs.p.overflow = overflowsbc!( self.regs.a, new_val, temp as u8 );
-        self.regs.p.carry = if( temp & 0x100 == 0x100 ) { 0 } else { 1 };
+        self.regs.p.carry = if temp & 0x100 == 0x100 { 0 } else { 1 };
         self.regs.a = temp as u8;
         self.memory[ address as usize ] = new_val;
         self.cycles += 4;
@@ -1069,7 +1060,7 @@ impl CPU {
         self.regs.p.carry = if data & 0x80 == 0x80 { 1 } else { 0 };
         let shifted_data = data << 1 | old_p;
         self.regs.a = self.regs.a & shifted_data;
-        set_sz!(self, self.regs.a );
+        set_zn!(self, self.regs.a );
         self.memory[ address ] = shifted_data;
         self.cycles += 4;
         if memAt!( self, self.pc ) == 0x3F
@@ -1084,7 +1075,7 @@ impl CPU {
         self.regs.p.carry = if data & 0x1 == 0x1 { 1 } else { 0 };
         let shifted_data = data >> 1;
         self.regs.a = self.regs.a ^ shifted_data;
-        set_sz!(self, self.regs.a );
+        set_zn!(self, self.regs.a );
         self.memory[ address ] = shifted_data;
         self.cycles += 4;
         if memAt!( self, self.pc ) == 0x5F
@@ -1107,7 +1098,7 @@ impl CPU {
         self.regs.a = temp as u8;
         self.memory[ address ] = shifted_data;
         self.cycles += 4;
-        if( memAt!( self, self.pc ) == 0x7F )
+        if memAt!( self, self.pc ) == 0x7F
         {
             self.cycles -= 1;
         }   
@@ -1117,8 +1108,8 @@ impl CPU {
 
 impl fmt::Display for CPU {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let addressingMode = addressing_mode[self.memory[ self.pc as usize ] as usize ];
-        match addressingMode {
+        let addressing_mode = ADDRESSING_MODE[self.memory[ self.pc as usize ] as usize ];
+        match addressing_mode {
             0 => write!(f, "[{:x}]{} {} \t", self.pc, self.regs, name!(self)),
             1 => write!(f, "[{:x}]{} {} #{:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
             2 | 12 => write!(f, "[{:x}]{} {} ${:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),

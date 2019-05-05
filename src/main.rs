@@ -8,11 +8,11 @@ fn main() {
 	let mut theCPU = cpu::CPU::new();
     let mut debug_path = "";
     let mut debug = false;
-    if( args.len() > 2 )
+    if args.len() > 2
     {
         debug = true;
         debug_path = &args[2];
     }
-	theCPU.loadRom( buff, debug, debug_path );
+	theCPU.load_rom( buff, debug, debug_path );
 	theCPU.execute();
 }

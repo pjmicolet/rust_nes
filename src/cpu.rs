@@ -24,22 +24,14 @@ static address_bytes : [u8; 256] =
   1,1,0,1,1,1,1,1,0,2,0,2,2,2,2,2 ];
 
 static addressing_mode : [u8; 256] =
-[ 0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7,
-  11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
-  7, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7,
-  11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
-  0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 13, 7, 7, 7,
-  11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
-  0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 10, 7, 7, 7,
-  11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
-  1, 18, 1, 18, 12, 12, 12, 12, 0, 1, 0, 1, 13, 13, 13, 13,
-  11, 19, 0, 6, 16, 16, 17, 17, 0, 15, 0, 9, 8, 14, 8, 8,
-  1, 5, 1, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7,
-  11, 6, 0, 6, 3, 3, 4, 4, 0, 9, 0, 9, 8, 8, 9, 9,
-  1, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7,
-  11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
-  1, 5, 1, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7,
-  11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8 ];
+[ 0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
+  7, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
+  0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 13, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
+  0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 10, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
+  1, 18, 1, 18, 12, 12, 12, 12, 0, 1, 0, 1, 13, 13, 13, 13, 11, 19, 0, 6, 16, 16, 17, 17, 0, 15, 0, 9, 8, 14, 8, 8,
+  1, 5, 1, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 4, 4, 0, 9, 0, 9, 8, 8, 9, 9,
+  1, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
+  1, 5, 1, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8 ];
 
 static names : [&str; 256] =
 [ "BRK", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "PHP", "ORA", "ASL", "ANC", "NOP", "ORA", "ASL", "SLO",
@@ -232,11 +224,11 @@ macro_rules! memAt {
 }
 
 macro_rules! memAtZp {
-    ( $x:ident, $( $y:expr ),+ ) => {
+    ( $x:ident, $pc:expr, $( $y:expr ),+ ) => {
         {
-            let mut data = 0;
+            let mut data = $x.memory[ $pc as usize ] as u16;
             $(
-                data = $x.memory[ ( ( data as u8 + $y as u8 ) as usize ) ] as u16;
+                data = $x.memory[ ( ( data + $y as u16 ) & 0x00FF ) as usize ] as u16;
              )+
             data as u16
         }
@@ -517,12 +509,12 @@ impl CPU {
             3 => return memAt!( self, self.pc+1, self.regs.x ), 
             4 => return memAt!( self, self.pc+1, self.regs.y ),
             5 => { 
-                    let address = composeAddress!( memAt!( self, self.pc + 1, self.regs.x + 1 ), memAt!( self, self.pc+1, self.regs.x ) );
+                    let address = composeAddress!( memAtZp!( self, self.pc + 1, self.regs.x + 1 ), memAtZp!( self, self.pc+1, self.regs.x ) );
                     return memAt!( self, address ) 
                  },
             6 => {
-                    let address = composeAddress!( memAt!( self, self.pc+1, 1 ), memAt!( self, self.pc+1 ) );
-                    return memAt!( self, address )
+                    let address = composeAddress!( memAtZp!( self, self.pc+1, 1 ), memAt!( self, self.pc+1 ) );
+                    return memAt!( self, address, self.regs.y )
                  },
             7 => {
                     let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
@@ -530,27 +522,26 @@ impl CPU {
                  },
             8 => {
                     let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) ) + self.regs.x as u16 ;
-                    println!("{:x}", address );
                     return memAt!( self, address )
                  },
             9 => {
-                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1, self.regs.y ) );
+                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) ) + self.regs.y as u16;
                     return memAt!( self, address )
                  },
             10 => {
                     let address1 = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
-                    let address2 = composeAddress!( address1 & 0xFF00, address1 & 0x00FF );
+                    let address2 = composeAddress!( address1 & 0xFF00, ( address1 + 1 ) & 0x00FF );
                     return composeAddress!( memAt!( self, address2 ), memAt!( self, address1 ) )
                   },
             11 => return memAt!( self, self.pc + 1 ),
             12 => return memAt!( self, self.pc + 1 ),
             13 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ),
-            14 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1, self.regs.x ) ),
-            15 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1, self.regs.y ) ),
+            14 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) )  + self.regs.x as u16,
+            15 => return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ) + self.regs.y as u16,
             16 => return memAt!( self, self.pc + 1 ) + self.regs.x as u16,
-            17 => return memAt!( self, self.pc + 1, self.regs.y ),
-            18 => return composeAddress!( memAt!( self, self.pc +1, self.regs.x+1), memAt!( self, self.pc+1,self.regs.x ) ),
-            19 => return composeAddress!( memAt!( self, self.pc +1 ), memAt!( self, self.pc+1 ) ),
+            17 => return memAt!( self, self.pc + 1 ) + self.regs.y as u16,
+            18 => return composeAddress!( memAtZp!( self, self.pc +1, self.regs.x+1), memAtZp!( self, self.pc+1,self.regs.x ) ),
+            19 => return composeAddress!( memAtZp!( self, self.pc +1, 1), memAt!( self, self.pc+1 ) ),
             _ => return 0,
         }
     }
@@ -592,6 +583,7 @@ impl CPU {
 
     fn sta( &mut self ) {
         let memory_address = self.dataFetch() as usize;
+        println!("Store {:x} in {:x}", self.regs.a, memory_address);
         self.memory[ memory_address ] = self.regs.a;
         self.cycles += 2;
     }

@@ -1,7 +1,6 @@
 use std::error::Error; use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use std::io::BufReader;
 
 /*
  * Right now I don't need this code
@@ -34,7 +33,7 @@ pub fn setup_fn( romfile : &str ) -> Vec<u8>
     //let mut buf = vec![];
     //let data_size = reader.read_until(b'=',&mut buf).expect("Rom file could not be fully read");
 	let mut buf = vec![];
-	let data_size = file.read_to_end(&mut buf);
+	let _data_size = file.read_to_end(&mut buf);
     let _info : [u32;2] = read_header( &mut buf );
 	buf[16.. ( _info[0] + 16 ) as usize].to_vec()
 }

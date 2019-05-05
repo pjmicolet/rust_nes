@@ -286,7 +286,7 @@ macro_rules! getDebugReg {
     ( $line:expr, $number:expr, $reg:expr ) => {
          match hex::decode( $line[$number].split(':').collect::<Vec<_>>()[1] ) {
                     Ok( v ) => v,
-                    Err( e ) => panic!("Messed up getting {}", $reg),
+                    Err( _e ) => panic!("Messed up getting {}", $reg),
                 }[0];
     };
 }
@@ -366,9 +366,9 @@ impl CPU {
             }
             println!("{} index", index );
         }
-        let pcPart1 : u16 = self.memory[0xFFFC] as u16;
-        let pcPart2 : u16 = self.memory[0xFFFD] as u16;
-        self.pc = pcPart1 | pcPart2 << 8;
+        let pc_part1 : u16 = self.memory[0xFFFC] as u16;
+        let pc_part2 : u16 = self.memory[0xFFFD] as u16;
+        self.pc = pc_part1 | pc_part2 << 8;
         self.pc = 0xC000;
         println!("What {:x} ", 0x8000 + data.len() );
 
@@ -381,7 +381,7 @@ impl CPU {
                 let split_line = newline.split(' ').collect::<Vec<_>>();
                 let pc_parts = match hex::decode( split_line[0] ) {
                     Ok( v ) => v,
-                    Err( e ) => panic!("That don't work"),
+                    Err( _e ) => panic!("That don't work"),
                 };
                 let pc = ( pc_parts[0] as u16 ) << 8 | pc_parts[1] as u16;
 
@@ -402,7 +402,7 @@ impl CPU {
         Ok(())
     }
     
-    pub fn debugValidate( & mut self ){
+    pub fn debug_validate( & mut self ){
         if self.pc != self.debug_data[ self.debug_iter ].pc {
             panic!( "PC is different Got: {:x} Expected: {:x}", self.pc, self.debug_data[ self.debug_iter].pc );
         }
@@ -418,9 +418,9 @@ impl CPU {
     }
 
     pub fn execute(&mut self) {
-        while( self.pc < 0xFFFF ) {
+        while self.pc < 0xFFFF {
             if self.debug_data.len() > 1 {
-                self.debugValidate();
+                self.debug_validate();
                 self.debug_iter = self.debug_iter + 1;
             }
             self.debug_decode();
@@ -537,9 +537,10 @@ impl CPU {
                     let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = ovop!( +=, u16, address, self.regs.x as u16 );
                     if get_data { 
-                        let shifts = memAt!(self, self.pc ) == 0x5E || memAt!(self, self.pc ) == 0x1E || memAt!( self, self.pc ) == 0x7E || memAt!(self, self.pc) == 0x3E || memAt!(self, self.pc) == 0xFE || memAt!(self, self.pc) == 0xDE || memAt!(self, self.pc) == 0xDF || memAt!(self, self.pc) == 0xFF || memAt!(self, self.pc) == 0x1F || memAt!(self, self.pc) == 0x3F || memAt!(self, self.pc) ==0x5F || memAt!(self, self.pc) == 0x7F;
+                        let opcode = memAt!(self, self.pc );
+                        let shifts = opcode == 0x5E || opcode == 0x1E || memAt!( self, self.pc ) == 0x7E || opcode == 0x3E || opcode == 0xFE || 
+                            opcode == 0xDE || opcode == 0xDF || opcode == 0xFF || opcode == 0x1F || opcode == 0x3F || opcode ==0x5F || opcode == 0x7F;
                         self.cycles += if (memAt!(self, self.pc+1) + self.regs.x as u16 ) & 0x100 == 0x100 || shifts { 3 } else { 2 };
-                        println!("{:x} {:x}", memAt!(self, self.pc + 1 ), self.regs.x );
                         return memAt!( self, address2 )
                     } else { return address2 }
                  },
@@ -571,7 +572,6 @@ impl CPU {
     }
 
     fn jmp( &mut self ) {
-        let pc = self.pc;
         let address = self.data_fetch(true);
         self.pc = address;
         self.cycles += 1;
@@ -754,7 +754,7 @@ impl CPU {
 
     fn sbc( &mut self ) {
         let data = self.data_fetch(true) as u8;
-        let temp = ovop!( -=, u16, self.regs.a as i16, data as i16, ( 1 - self.regs.p.carry as i16 ) );
+        let temp = ovop!( -=, u16, self.regs.a as i16, data as i16, 1 - self.regs.p.carry as i16 );
 
         self.regs.p.carry = ( 0x100 & temp != 0x100 ) as u8;
         self.regs.p.zero = isZer!( temp & 0xFF );
@@ -950,7 +950,6 @@ impl CPU {
 
     fn ror( &mut self ) {
         if memAt!( self, self.pc ) == 0x6A {
-            let a = self.regs.a;
             let old_p = self.regs.p.carry;
             self.regs.p.carry = self.regs.a & 0x1;
             self.regs.a = self.regs.a >> 1 | old_p << 7;

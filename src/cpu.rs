@@ -516,48 +516,28 @@ impl CPU {
             2 => { if get_data { self.cycles += 1; return memAt!( self, self.pc+1, 0 ) } else { return memAt!( self, self.pc+1 ) } }, 
             3 => { if get_data { self.cycles += 2; return memAtZp!( self, self.pc+1, self.regs.x ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF } }, 
             4 => { if get_data { self.cycles += 2; return memAtZp!( self, self.pc+1, self.regs.y ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF } },
-            5 => { 
-                    let address = composeAddress!( memAtZp!( self, self.pc + 1, self.regs.x + 1 ), memAtZp!( self, self.pc+1, self.regs.x ) );
-                    if get_data { self.cycles += 4; return memAt!( self, address ) } else { return address } 
-                 },
-            6 => {
-                    let address = composeAddress!( memAtZp!( self, self.pc+1, 1 ), memAt!( self, self.pc+1, 0) );
-                    let address2 = ovop!( +=, u16, address, self.regs.y as u16 );
-                    if get_data 
-                    {
-                        self.cycles += if ( memAt!(self, self.pc+1, 0) + self.regs.y as u16 ) & 0x100 == 0x100 { 4 } else { 3 };
-                        return memAt!( self, address2 ) 
-                    } else { return address2 }
-                 },
-            7 => {
-                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
-                    if get_data { self.cycles += 2; return memAt!( self, address ) } else { return address }
-                 },
-            8 => {
-                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
+            5 => { let address = composeAddress!( memAtZp!( self, self.pc + 1, self.regs.x + 1 ), memAtZp!( self, self.pc+1, self.regs.x ) );
+                   if get_data { self.cycles += 4; return memAt!( self, address ) } else { return address } },
+            6 => { let address = composeAddress!( memAtZp!( self, self.pc+1, 1 ), memAt!( self, self.pc+1, 0) );
+                   let address2 = ovop!( +=, u16, address, self.regs.y as u16 );
+                   if get_data { self.cycles += if ( memAt!(self, self.pc+1, 0) + self.regs.y as u16 ) & 0x100 == 0x100 { 4 } else { 3 };
+                        return memAt!( self, address2 ) } else { return address2 } },
+            7 => { let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
+                   if get_data { self.cycles += 2; return memAt!( self, address ) } else { return address } },
+            8 => { let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = ovop!( +=, u16, address, self.regs.x as u16 );
-                    if get_data { 
-                        let opcode = memAt!(self, self.pc );
+                    if get_data { let opcode = memAt!(self, self.pc );
                         let shifts = opcode == 0x5E || opcode == 0x1E || memAt!( self, self.pc ) == 0x7E || opcode == 0x3E || opcode == 0xFE || 
                             opcode == 0xDE || opcode == 0xDF || opcode == 0xFF || opcode == 0x1F || opcode == 0x3F || opcode ==0x5F || opcode == 0x7F;
                         self.cycles += if (memAt!(self, self.pc+1) + self.regs.x as u16 ) & 0x100 == 0x100 || shifts { 3 } else { 2 };
-                        return memAt!( self, address2 )
-                    } else { return address2 }
-                 },
-            9 => {
-                    let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
+                        return memAt!( self, address2 ) } else { return address2 } },
+            9 => { let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = ovop!( +=, u16, address, self.regs.y as u16 );
-                    if get_data {
-                        self.cycles += if (memAt!(self, self.pc+1) + self.regs.y as u16 ) & 0x100 == 0x100 { 3 } else { 2 };
-                        return memAt!( self, address2 ) 
-                    } else { return address2 } 
-                 },
-            10 => {
-                    let address1 = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
+                    if get_data { self.cycles += if (memAt!(self, self.pc+1) + self.regs.y as u16 ) & 0x100 == 0x100 { 3 } else { 2 };
+                        return memAt!( self, address2 ) } else { return address2 } },
+            10 => { let address1 = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = address1 & 0xFF00 | (address1+1) & 0x00FF;
-                    self.cycles += 4;
-                    return composeAddress!( memAt!( self, address2 ), memAt!( self, address1 ) )
-                  },
+                    self.cycles += 4; return composeAddress!( memAt!( self, address2 ), memAt!( self, address1 ) ) },
             11 => return memAt!( self, self.pc + 1 ),
             12 => { self.cycles += 1; return memAt!( self, self.pc + 1 ) },
             13 => { self.cycles += 2; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) )},
@@ -818,42 +798,36 @@ impl CPU {
 
     fn tay( &mut self ) {
         self.regs.y = self.regs.a;
-
         set_zn!(self, self.regs.y);
         self.cycles += 2;
     }
 
     fn tya( &mut self ) {
         self.regs.a = self.regs.y;
-
         set_zn!(self, self.regs.a);
         self.cycles += 2;
     }
 
     fn tax( &mut self ) {
         self.regs.x = self.regs.a;
-
         set_zn!(self, self.regs.x);
         self.cycles += 2;
     }
 
     fn txa( &mut self ) {
         self.regs.a = self.regs.x;
-
         set_zn!(self, self.regs.a);
         self.cycles += 2;
     }
 
     fn tsx( &mut self ) {
         self.regs.x = self.regs.s;
-
         set_zn!(self, self.regs.x);
         self.cycles += 2;
     }
 
     fn txs( &mut self ) {
         self.regs.s = self.regs.x;
-
         self.cycles += 2;
     }
 

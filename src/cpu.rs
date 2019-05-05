@@ -594,8 +594,7 @@ impl CPU {
     fn ldy( &mut self ) {
         let data = self.data_fetch(true);
         self.regs.y = data as u8;
-        self.regs.p.zero = isZer!( self.regs.y );
-        self.regs.p.negative = isNeg!( self.regs.y );
+        set_zn!( self, self.regs.y );
         self.cycles += 2;
     }
 
@@ -741,12 +740,10 @@ impl CPU {
 
     fn adc( &mut self ) {
         let data = self.data_fetch(true) as u8;
-       // let temp = data as u16 + self.regs.a as u16 + self.regs.p.carry as u16;
         let temp = ovop!( +=, u16, data as u16 , self.regs.a as u16 , self.regs.p.carry as u16 );
 
         self.regs.p.carry = ( 0x100 & temp == 0x100 ) as u8;
-        self.regs.p.zero = isZer!( temp & 0xFF );
-        self.regs.p.negative = isNeg!( temp );
+        set_zn!(self, temp & 0xFF);
         self.regs.p.overflow = overflow!( self.regs.a, data, temp as u8 );
         self.regs.a = ( temp & 0xFF ) as u8;
         self.cycles += 2;
@@ -757,8 +754,7 @@ impl CPU {
         let temp = ovop!( -=, u16, self.regs.a as i16, data as i16, 1 - self.regs.p.carry as i16 );
 
         self.regs.p.carry = ( 0x100 & temp != 0x100 ) as u8;
-        self.regs.p.zero = isZer!( temp & 0xFF );
-        self.regs.p.negative = isNeg!( temp );
+        set_zn!(self, temp & 0xFF);
         self.regs.p.overflow = overflowsbc!( self.regs.a, data, temp as u8 );
         self.regs.a = ( temp & 0xFF ) as u8;
         self.cycles += 2;
@@ -766,43 +762,37 @@ impl CPU {
 
     fn ora( &mut self ) {
         self.regs.a |= self.data_fetch(true) as u8;
-        self.regs.p.zero = isZer!( self.regs.a );
-        self.regs.p.negative = isNeg!( self.regs.a );
+        set_zn!(self, self.regs.a);
         self.cycles += 2;
     }
 
     fn iny( &mut self ) {
         self.regs.y = ovop!( +=, u8, self.regs.y, 1 );
-        self.regs.p.zero = isZer!( self.regs.y );
-        self.regs.p.negative = isNeg!( self.regs.y );
+        set_zn!(self, self.regs.y);
         self.cycles += 2;
     }
 
     fn dey( &mut self ) {
         self.regs.y = ovop!( -=, u8, self.regs.y, 1 );
-        self.regs.p.zero = isZer!( self.regs.y );
-        self.regs.p.negative = isNeg!( self.regs.y );
+        set_zn!(self, self.regs.y);
         self.cycles += 2;
     }
 
     fn dex( &mut self ) {
         self.regs.x = ovop!( -=, u8, self.regs.x, 1 );
-        self.regs.p.zero = isZer!( self.regs.x );
-        self.regs.p.negative = isNeg!( self.regs.x );
+        set_zn!(self, self.regs.x);
         self.cycles += 2;
     }
 
     fn inx( &mut self ) {
         self.regs.x = ovop!( +=, u8, self.regs.x, 1 );
-        self.regs.p.zero = isZer!( self.regs.x );
-        self.regs.p.negative = isNeg!( self.regs.x );
+        set_zn!(self, self.regs.x);
         self.cycles += 2;
     }
 
     fn eor( &mut self ) {
         self.regs.a ^= self.data_fetch(true) as u8;
-        self.regs.p.zero = isZer!( self.regs.a );
-        self.regs.p.negative = isNeg!( self.regs.a );
+        set_zn!(self, self.regs.a);
         self.cycles += 2;
     }
 
@@ -829,40 +819,35 @@ impl CPU {
     fn tay( &mut self ) {
         self.regs.y = self.regs.a;
 
-        self.regs.p.zero = isZer!( self.regs.y );
-        self.regs.p.negative = isNeg!( self.regs.y );
+        set_zn!(self, self.regs.y);
         self.cycles += 2;
     }
 
     fn tya( &mut self ) {
         self.regs.a = self.regs.y;
 
-        self.regs.p.zero = isZer!( self.regs.a );
-        self.regs.p.negative = isNeg!( self.regs.a );
+        set_zn!(self, self.regs.a);
         self.cycles += 2;
     }
 
     fn tax( &mut self ) {
         self.regs.x = self.regs.a;
 
-        self.regs.p.zero = isZer!( self.regs.x );
-        self.regs.p.negative = isNeg!( self.regs.x );
+        set_zn!(self, self.regs.x);
         self.cycles += 2;
     }
 
     fn txa( &mut self ) {
         self.regs.a = self.regs.x;
 
-        self.regs.p.zero = isZer!( self.regs.a );
-        self.regs.p.negative = isNeg!( self.regs.a );
+        set_zn!(self, self.regs.a);
         self.cycles += 2;
     }
 
     fn tsx( &mut self ) {
         self.regs.x = self.regs.s;
 
-        self.regs.p.zero = isZer!( self.regs.x );
-        self.regs.p.negative = isNeg!( self.regs.x );
+        set_zn!(self, self.regs.x);
         self.cycles += 2;
     }
 
@@ -885,8 +870,7 @@ impl CPU {
         if memAt!( self, self.pc ) == 0x4a {
             self.regs.p.carry = self.regs.a & 0x1; // check this first
             self.regs.a = self.regs.a >> 1;
-            self.regs.p.zero = isZer!( self.regs.a );
-            self.regs.p.negative = isNeg!( self.regs.a );
+            set_zn!(self, self.regs.a);
             self.cycles += 2;
         }
         else {
@@ -906,8 +890,7 @@ impl CPU {
             self.regs.p.carry = if ( self.regs.a & 0x80 ) == 0x80 { 1 } else { 0 }; // check this first
             self.regs.a = self.regs.a << 1;
             self.cycles += 2;
-            self.regs.p.zero = isZer!( self.regs.a );
-            self.regs.p.negative = isNeg!( self.regs.a );
+            set_zn!(self, self.regs.a);
         }
         else {
             let data = self.data_fetch(true);
@@ -1038,8 +1021,7 @@ impl CPU {
         let new_val = ovop!(+=, u8, shift_val, 1 );
         let semi_carr = 1 - self.regs.p.carry;
         let temp = ovop!( -=, u16, self.regs.a as i16, new_val as i16, semi_carr as i16 );
-        self.regs.p.zero = if temp & 0xFF == 0 { 1 } else { 0 };
-        self.regs.p.negative = if temp & 0x80 == 0x80 { 1 } else { 0 };
+        set_zn!(self, temp & 0xFF);
         self.regs.p.overflow = overflowsbc!( self.regs.a, new_val, temp as u8 );
         self.regs.p.carry = if temp & 0x100 == 0x100 { 0 } else { 1 };
         self.regs.a = temp as u8;
@@ -1053,8 +1035,7 @@ impl CPU {
         self.regs.p.carry = if data & 0x80 == 0x80 { 1 } else { 0 };
         let shifted_data = data << 1;
         self.regs.a = shifted_data | self.regs.a;
-        self.regs.p.zero = if self.regs.a == 0 { 1 } else { 0 };
-        self.regs.p.negative = if self.regs.a & 0x80 == 0x80 { 1 } else { 0 };
+        set_zn!(self, self.regs.a);
         self.memory[ address ] = shifted_data;
         self.cycles += 4;
     }
@@ -1089,8 +1070,7 @@ impl CPU {
         self.regs.p.carry = if data & 0x1 == 0x1 { 1 } else { 0 };
         let shifted_data = data >> 1 | old_p << 7;
         let temp = ovop!(+=, u16, shifted_data as u16, self.regs.a as u16, self.regs.p.carry as u16);
-        self.regs.p.zero = if temp & 0xFF == 0 { 1 } else { 0 };
-        self.regs.p.negative = if temp & 0x80 == 0x80 { 1 } else { 0 };
+        set_zn!(self, temp & 0xFF);
         self.regs.p.overflow = overflow!( self.regs.a, shifted_data, temp as u8 );
         self.regs.p.carry = if temp & 0x100 == 0x100 { 1 } else  { 0 };
         self.regs.a = temp as u8;

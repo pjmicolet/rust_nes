@@ -190,10 +190,10 @@ impl PartialEq for Regs {
 
 impl Eq for Regs {}
 
-pub struct CPU {
+pub struct CPU<'mem> {
     pc : u16,
     regs: Regs,
-    memory : [u8; 0x10000],
+    memory : &'mem mut [u8],
     dma_wait : u8,
     dma_wait_cycles : u8,
     vram_buff : u8,
@@ -327,9 +327,9 @@ macro_rules! ovop {
     };
 }
 
-impl CPU {
+impl<'mem> CPU<'mem> {
 
-    pub fn new( ) -> CPU {
+    pub fn new( mem : &'mem mut [u8] ) -> CPU<'mem> {
         CPU {
             regs: Regs::new(),
             pc: 0x0000,
@@ -337,7 +337,7 @@ impl CPU {
             dma_wait: 0,
             dma_wait_cycles: 0,
             vram_buff: 0,
-            memory: [0; 0x10000],
+            memory: mem,
             sl : 0,
             debug_data : Vec::new(),
             debug_iter : 0
@@ -927,7 +927,6 @@ impl CPU {
 
     fn rol( &mut self ) {
         if memAt!( self, self.pc ) == 0x2A {
-            let a = self.regs.a;
             let old_p = self.regs.p.carry;
             self.regs.p.carry = if self.regs.a & 0x80 == 0x80 { 1 } else { 0 };
             self.regs.a = self.regs.a << 1 | old_p;
@@ -1053,7 +1052,7 @@ impl CPU {
     }
 }    
 
-impl fmt::Display for CPU {
+impl<'mem> fmt::Display for CPU<'mem> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let addressing_mode = ADDRESSING_MODE[self.memory[ self.pc as usize ] as usize ];
         match addressing_mode {

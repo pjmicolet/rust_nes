@@ -1,92 +1,93 @@
 extern crate hex;
+use crate::memory::MemoryController;
 use std::num::Wrapping;
 use std::fmt;
 use std::path::Path;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Result};
 
-static address_bytes : [u8; 256] =
-[ 0,1,0,1,1,1,1,1,0,1,0,0,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,2,0,2,2,2,2,2,
-  2,1,0,1,1,1,1,1,0,1,0,0,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,2,0,2,2,2,2,2,
-  0,1,0,1,1,1,1,1,0,1,0,0,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,2,0,2,2,2,2,2,
-  0,1,0,1,1,1,1,1,0,1,0,0,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,2,0,2,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,0,0,0,2,2,2,2,
-  1,1,0,0,1,1,1,1,0,2,0,0,0,2,0,0,
-  1,1,1,1,1,1,1,1,0,1,0,0,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,2,0,0,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,1,0,0,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,2,0,2,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,1,0,1,2,2,2,2,
-  1,1,0,1,1,1,1,1,0,2,0,2,2,2,2,2 ];
+static ADDRESS_BYTES : [u8; 256] =
+[ 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 2, 0, 2, 2, 2, 2, 2, 
+  2, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 2, 0, 2, 2, 2, 2, 2, 
+  0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 2, 0, 2, 2, 2, 2, 2, 
+  0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 2, 0, 2, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 2, 2, 2, 2, 
+  1, 1, 0, 0, 1, 1, 1, 1, 0, 2, 0, 0, 0, 2, 0, 0, 
+  1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 2, 0, 0, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 2, 0, 2, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 2, 2, 2, 2, 
+  1, 1, 0, 1, 1, 1, 1, 1, 0, 2, 0, 2, 2, 2, 2, 2 ];
 
 static ADDRESSING_MODE : [u8; 256] =
-[ 0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
-  7, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
-  0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 13, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
-  0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 10, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
-  1, 18, 1, 18, 12, 12, 12, 12, 0, 1, 0, 1, 13, 13, 13, 13, 11, 19, 0, 6, 16, 16, 17, 17, 0, 15, 0, 9, 8, 14, 8, 8,
-  1, 5, 1, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 4, 4, 0, 9, 0, 9, 8, 8, 9, 9,
-  1, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8,
+[ 0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8, 
+  7, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8, 
+  0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 13, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8, 
+  0, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 10, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8, 
+  1, 18, 1, 18, 12, 12, 12, 12, 0, 1, 0, 1, 13, 13, 13, 13, 11, 19, 0, 6, 16, 16, 17, 17, 0, 15, 0, 9, 8, 14, 8, 8, 
+  1, 5, 1, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 4, 4, 0, 9, 0, 9, 8, 8, 9, 9, 
+  1, 5, 0, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8, 
   1, 5, 1, 5, 2, 2, 2, 2, 0, 1, 0, 1, 7, 7, 7, 7, 11, 6, 0, 6, 3, 3, 3, 3, 0, 9, 0, 9, 8, 8, 8, 8 ];
 
 static NAMES : [&str; 256] =
-[ "BRK", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "PHP", "ORA", "ASL", "ANC", "NOP", "ORA", "ASL", "SLO", "BPL", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "CLC", "ORA", "NOP", "SLO", "NOP", "ORA", "ASL", "SLO",
-"JSR", "AND", "KIL", "RLA", "BIT", "AND", "ROL", "RLA", "PLP", "AND", "ROL", "ANC", "BIT", "AND", "ROL", "RLA", "BMI", "AND", "KIL", "RLA", "NOP", "AND", "ROL", "RLA", "SEC", "AND", "NOP", "RLA", "NOP", "AND", "ROL", "RLA",
-"RTI", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE", "PHA", "EOR", "LSR", "ALR", "JMP", "EOR", "LSR", "SRE", "BVC", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE", "CLI", "EOR", "NOP", "SRE", "NOP", "EOR", "LSR", "SRE",
-"RTS", "ADC", "KIL", "RRA", "NOP", "ADC", "ROR", "RRA", "PLA", "ADC", "ROR", "ARR", "JMP", "ADC", "ROR", "RRA", "BVS", "ADC", "KIL", "RRA", "NOP", "ADC", "ROR", "RRA", "SEI", "ADC", "NOP", "RRA", "NOP", "ADC", "ROR", "RRA",
-"NOP", "STA", "NOP", "SAX", "STY", "STA", "STX", "SAX", "DEY", "NOP", "TXA", "XAA", "STY", "STA", "STX", "SAX", "BCC", "STA", "KIL", "AHX", "STY", "STA", "STX", "SAX", "TYA", "STA", "TXS", "TAS", "SHY", "STA", "SHX", "AHX",
-"LDY", "LDA", "LDX", "LAX", "LDY", "LDA", "LDX", "LAX", "TAY", "LDA", "TAX", "LAX", "LDY", "LDA", "LDX", "LAX", "BCS", "LDA", "KIL", "LAX", "LDY", "LDA", "LDX", "LAX", "CLV", "LDA", "TSX", "LAS", "LDY", "LDA", "LDX", "LAX",
-"CPY", "CMP", "NOP", "DCP", "CPY", "CMP", "DEC", "DCP", "INY", "CMP", "DEX", "AXS", "CPY", "CMP", "DEC", "DCP", "BNE", "CMP", "KIL", "DCP", "NOP", "CMP", "DEC", "DCP", "CLD", "CMP", "NOP", "DCP", "NOP", "CMP", "DEC", "DCP",
+[ "BRK", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "PHP", "ORA", "ASL", "ANC", "NOP", "ORA", "ASL", "SLO", "BPL", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "CLC", "ORA", "NOP", "SLO", "NOP", "ORA", "ASL", "SLO", 
+"JSR", "AND", "KIL", "RLA", "BIT", "AND", "ROL", "RLA", "PLP", "AND", "ROL", "ANC", "BIT", "AND", "ROL", "RLA", "BMI", "AND", "KIL", "RLA", "NOP", "AND", "ROL", "RLA", "SEC", "AND", "NOP", "RLA", "NOP", "AND", "ROL", "RLA", 
+"RTI", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE", "PHA", "EOR", "LSR", "ALR", "JMP", "EOR", "LSR", "SRE", "BVC", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE", "CLI", "EOR", "NOP", "SRE", "NOP", "EOR", "LSR", "SRE", 
+"RTS", "ADC", "KIL", "RRA", "NOP", "ADC", "ROR", "RRA", "PLA", "ADC", "ROR", "ARR", "JMP", "ADC", "ROR", "RRA", "BVS", "ADC", "KIL", "RRA", "NOP", "ADC", "ROR", "RRA", "SEI", "ADC", "NOP", "RRA", "NOP", "ADC", "ROR", "RRA", 
+"NOP", "STA", "NOP", "SAX", "STY", "STA", "STX", "SAX", "DEY", "NOP", "TXA", "XAA", "STY", "STA", "STX", "SAX", "BCC", "STA", "KIL", "AHX", "STY", "STA", "STX", "SAX", "TYA", "STA", "TXS", "TAS", "SHY", "STA", "SHX", "AHX", 
+"LDY", "LDA", "LDX", "LAX", "LDY", "LDA", "LDX", "LAX", "TAY", "LDA", "TAX", "LAX", "LDY", "LDA", "LDX", "LAX", "BCS", "LDA", "KIL", "LAX", "LDY", "LDA", "LDX", "LAX", "CLV", "LDA", "TSX", "LAS", "LDY", "LDA", "LDX", "LAX", 
+"CPY", "CMP", "NOP", "DCP", "CPY", "CMP", "DEC", "DCP", "INY", "CMP", "DEX", "AXS", "CPY", "CMP", "DEC", "DCP", "BNE", "CMP", "KIL", "DCP", "NOP", "CMP", "DEC", "DCP", "CLD", "CMP", "NOP", "DCP", "NOP", "CMP", "DEC", "DCP", 
 "CPX", "SBC", "NOP", "ISB", "CPX", "SBC", "INC", "ISB", "INX", "SBC", "NOP", "SBC", "CPX", "SBC", "INC", "ISB", "BEQ", "SBC", "KIL", "ISB", "NOP", "SBC", "INC", "ISB", "SED", "SBC", "NOP", "ISB", "NOP", "SBC", "INC", "ISB" ];
 
 struct StatusReg {
-    carry : u8,
-    zero : u8,
-    interrupt : u8,
-    decimal : u8,
-    s1 : u8,
-    s2 : u8,
-    overflow : u8,
-    negative : u8,
+    carry : u8, 
+    zero : u8, 
+    interrupt : u8, 
+    decimal : u8, 
+    s1 : u8, 
+    s2 : u8, 
+    overflow : u8, 
+    negative : u8, 
 }
 
 struct Regs {
-    a : u8,
-    x : u8,
-    y : u8,
-    s : u8,
-    p : StatusReg,
+    a : u8, 
+    x : u8, 
+    y : u8, 
+    s : u8, 
+    p : StatusReg, 
 }
 
 struct DebugInfo {
-    instr : String,
-    cycles : u64,
-    regs : Regs,
-    pc : u16,
+    instr : String, 
+    cycles : u64, 
+    regs : Regs, 
+    pc : u16, 
 }
 
 impl DebugInfo {
     fn new() -> DebugInfo {
         DebugInfo
         {
-            instr : String::from( "" ),
-            cycles : 0,
-            regs : Regs::new(),
-            pc : 0,
+            instr : String::from( "" ), 
+            cycles : 0, 
+            regs : Regs::new(), 
+            pc : 0, 
         }
     }
 
     fn new_args( new_pc : u16, new_instr : String, new_regs : Vec<u16>, new_cycles : u64 ) -> DebugInfo {
         let mut db = DebugInfo
         {
-            pc : new_pc,
-            instr : new_instr,
-            regs : Regs::new(),
-            cycles : new_cycles,
+            pc : new_pc, 
+            instr : new_instr, 
+            regs : Regs::new(), 
+            cycles : new_cycles, 
         };
 
         let mut p_reg = vec![0; 8];
@@ -121,14 +122,14 @@ impl fmt::Display for Regs {
 impl StatusReg {
     fn new() -> StatusReg {
         StatusReg {
-            carry : 0x0,
-            zero : 0x0,
-            interrupt : 0x1,
-            decimal : 0x0,
-            s1 : 0x0,
-            s2 : 0x1,
-            overflow : 0x0,
-            negative : 0x0,
+            carry : 0x0, 
+            zero : 0x0, 
+            interrupt : 0x1, 
+            decimal : 0x0, 
+            s1 : 0x0, 
+            s2 : 0x1, 
+            overflow : 0x0, 
+            negative : 0x0, 
         }
     }
 
@@ -139,14 +140,14 @@ impl StatusReg {
 
     pub fn from_int( & self, data : u8 ) -> StatusReg {
         StatusReg {
-            carry : data & 0x1,
-            zero : ( data & 0x2 ) >> 1,
-            interrupt : ( data & 0x4 ) >> 2,
-            decimal : ( data & 0x8 ) >> 3,
-            s1 : ( data & 0x10 ) >> 4,
-            s2 : ( data & 0x20 ) >> 5,
-            overflow : ( data & 0x40 ) >> 6,
-            negative : ( data & 0x80 ) >> 7,
+            carry : data & 0x1, 
+            zero : ( data & 0x2 ) >> 1, 
+            interrupt : ( data & 0x4 ) >> 2, 
+            decimal : ( data & 0x8 ) >> 3, 
+            s1 : ( data & 0x10 ) >> 4, 
+            s2 : ( data & 0x20 ) >> 5, 
+            overflow : ( data & 0x40 ) >> 6, 
+            negative : ( data & 0x80 ) >> 7, 
         }
     }
 }
@@ -169,11 +170,11 @@ impl Eq for StatusReg {}
 impl Regs {
     fn new() -> Regs {
         Regs {
-            s:    0xFD,
-            a:    0x0,
-            x:     0x0,
-            y:     0x0,
-            p:  StatusReg::new(),
+            s:    0xFD, 
+            a:    0x0, 
+            x:     0x0, 
+            y:     0x0, 
+            p:  StatusReg::new(), 
         }
     }
 }
@@ -191,25 +192,25 @@ impl PartialEq for Regs {
 impl Eq for Regs {}
 
 pub struct CPU<'mem> {
-    pc : u16,
-    regs: Regs,
-    memory : &'mem mut [u8],
-    dma_wait : u8,
-    dma_wait_cycles : u8,
-    vram_buff : u8,
-    cycles : u64,
-    sl : u16,
-    debug_data : Vec< DebugInfo >,
+    pc : u16, 
+    regs: Regs, 
+    memory : &'mem mut MemoryController, 
+    dma_wait : u8, 
+    dma_wait_cycles : u8, 
+    vram_buff : u8, 
+    cycles : u64, 
+    sl : u16, 
+    debug_data : Vec< DebugInfo >, 
     debug_iter : usize
 }
 
 macro_rules! memAt {
-    ( $x:ident, $( $y:expr ),+ ) => {
+    ( $x:ident, $( $y:expr ), + ) => {
         {
             let mut data = 0;
             $(
                 let address = ovop!(+=, u16, data as u16, $y as u16 );
-                data = $x.memory[ ( address as usize ) ] as u16;
+                data = $x.memory.read(address as usize) as u16;
              )+
             data as u16
         }
@@ -217,12 +218,12 @@ macro_rules! memAt {
 }
 
 macro_rules! memAtZp {
-    ( $x:ident, $pc:expr, $( $y:expr ),+ ) => {
+    ( $x:ident, $pc:expr, $( $y:expr ), + ) => {
         {
-            let mut data = $x.memory[ $pc as usize ] as u16;
+            let mut data = $x.memory.read($pc as usize) as u16;
             $(
                 let address = ovop!(+=, u16, data as u16, $y as u16 );
-                data = $x.memory[ ( address & 0x00FF ) as usize ] as u16;
+                data = $x.memory.read( (  address & 0x00FF ) as usize ) as u16;
              )+
             data as u16
         }
@@ -278,22 +279,22 @@ macro_rules! set_zn {
 
 macro_rules! composeData {
     ( $self:expr, $addr1:expr, $addr2:expr ) => {
-        ( $self.memory[ ( $addr1 ) as usize ] as u16 ) << 8 | $self.memory[ ( $addr2 ) as usize ] as u16
+        ( $self.memory.read ( $addr1  as usize ) as u16 ) << 8 | $self.memory.read(  $addr2  as usize ) as u16
     };
 }
 
 macro_rules! getDebugReg {
     ( $line:expr, $number:expr, $reg:expr ) => {
          match hex::decode( $line[$number].split(':').collect::<Vec<_>>()[1] ) {
-                    Ok( v ) => v,
-                    Err( _e ) => panic!("Messed up getting {}", $reg),
+                    Ok( v ) => v, 
+                    Err( _e ) => panic!("Messed up getting {}", $reg), 
                 }[0];
     };
 }
 
 macro_rules! name {
     ( $self:expr ) => {
-        NAMES[$self.memory[ $self.pc as usize ] as usize ]
+        NAMES[$self.memory.read( $self.pc as usize ) as usize ]
     };
 }
 
@@ -316,7 +317,7 @@ macro_rules! overflowsbc {
 }
 
 macro_rules! ovop {
-    ( $op:tt, $type:tt, $firstitem:expr, $( $item:expr ),+ ) =>  {
+    ( $op:tt, $type:tt, $firstitem:expr, $( $item:expr ), + ) =>  {
         {
             let mut sum = Wrapping( $firstitem );
             $(
@@ -329,17 +330,17 @@ macro_rules! ovop {
 
 impl<'mem> CPU<'mem> {
 
-    pub fn new( mem : &'mem mut [u8] ) -> CPU<'mem> {
+    pub fn new( mem : &'mem mut MemoryController ) -> CPU<'mem> {
         CPU {
-            regs: Regs::new(),
-            pc: 0x0000,
-            cycles: 0,
-            dma_wait: 0,
-            dma_wait_cycles: 0,
-            vram_buff: 0,
-            memory: mem,
-            sl : 0,
-            debug_data : Vec::new(),
+            regs: Regs::new(), 
+            pc: 0x0000, 
+            cycles: 0, 
+            dma_wait: 0, 
+            dma_wait_cycles: 0, 
+            vram_buff: 0, 
+            memory: mem, 
+            sl : 0, 
+            debug_data : Vec::new(), 
             debug_iter : 0
         }
     }
@@ -351,23 +352,23 @@ impl<'mem> CPU<'mem> {
             let base2 = 0xC000;
             let mut index  = 0;
             for byte in data.iter() {
-                self.memory[ base1 + index ] = byte.clone();
-                self.memory[ base2 + index ] = *byte;
+                self.memory.store( base1 + index, byte.clone() );
+                self.memory.store( base2 + index, *byte );
                 index = index + 1;
             }
         }
         else {
-            println!("{} SIZE ?",data.len());
+            println!("{} SIZE ?", data.len());
             let base1 = 0x8000;
             let mut index = 0;
             for byte in data.iter() {
-                self.memory[ base1 + index ] = byte.clone();
+                self.memory.store( base1 + index, byte.clone() );
                 index = index + 1;
             }
             println!("{} index", index );
         }
-        let pc_part1 : u16 = self.memory[0xFFFC] as u16;
-        let pc_part2 : u16 = self.memory[0xFFFD] as u16;
+        let pc_part1 : u16 = self.memory.read(0xFFFC) as u16;
+        let pc_part2 : u16 = self.memory.read(0xFFFD) as u16;
         self.pc = pc_part1 | pc_part2 << 8;
         self.pc = 0xC000;
         println!("What {:x} ", 0x8000 + data.len() );
@@ -380,8 +381,8 @@ impl<'mem> CPU<'mem> {
                 let newline = line?;
                 let split_line = newline.split(' ').collect::<Vec<_>>();
                 let pc_parts = match hex::decode( split_line[0] ) {
-                    Ok( v ) => v,
-                    Err( _e ) => panic!("That don't work"),
+                    Ok( v ) => v, 
+                    Err( _e ) => panic!("That don't work"), 
                 };
                 let pc = ( pc_parts[0] as u16 ) << 8 | pc_parts[1] as u16;
 
@@ -410,7 +411,7 @@ impl<'mem> CPU<'mem> {
             panic!( "Hey this isn't right Got: {} Expected: {}", name!( self ) , debug_name!( self ) );
         }
         if self.regs != self.debug_data[ self.debug_iter ].regs {
-            panic!( "regs\nGot:{:x}{}\nExpected:{:x}{}", self.pc, self.regs,self.debug_data[self.debug_iter].pc, self.debug_data[ self.debug_iter].regs );
+            panic!( "regs\nGot:{:x}{}\nExpected:{:x}{}", self.pc, self.regs, self.debug_data[self.debug_iter].pc, self.debug_data[ self.debug_iter].regs );
         }
         if self.cycles != self.debug_data[ self.debug_iter].cycles {
             panic!( "Cycles aint right {}/{}", self.cycles, self.debug_data[self.debug_iter].cycles);
@@ -430,8 +431,8 @@ impl<'mem> CPU<'mem> {
 
     fn next_pc(&mut self) {
         let mem_index : usize = self.pc as usize;
-        let index : usize = self.memory[mem_index] as usize;
-        self.pc = self.pc + address_bytes[index] as u16 + 1;    
+        let index : usize = self.memory.read(mem_index) as usize;
+        self.pc = self.pc + ADDRESS_BYTES[index] as u16 + 1;    
     }
 
     fn debug_decode(&mut self) {
@@ -441,113 +442,95 @@ impl<'mem> CPU<'mem> {
     fn step_once(&mut self) {
         let instruction_opcode = memAt!( self, self.pc );
         match instruction_opcode {
-            0x08 => self.php(),
-            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(),
-            0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.cmp(),
-            0x4C | 0x6C => { self.jmp(); return },
-            0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(),
-            0xA3 | 0xA7 | 0xAF | 0xB3 | 0xB7 | 0xBF => self.lax(),
-            0x83 | 0x87 | 0x8F | 0x97 => self.sax(),
-            0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(),
-            0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(),
-            0x84 | 0x94 | 0x8C => self.sty(),
-            0x86 | 0x96 | 0x8E => self.stx(),
-            0x04 | 0x0C | 0x14 | 0x1C | 0x34 | 0x3C | 0x44 | 0x80 | 0x54 | 0x5C | 0x7C | 0xDC | 0xFC | 0x64 | 0x74 | 0xD4 | 0xF4 | 0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => self.nop(),
-            0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(),
-            0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(),
-            0xC0 | 0xC4 | 0xCC => self.cpy(),
-            0xE0 | 0xE4 | 0xEC => self.cpx(),
-            0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(),
-            0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(),
-            0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 | 0xEB => self.sbc(),
-            0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(),
-            0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(),
-            0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(),
-            0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(),
-            0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(),
-            0xC3 | 0xC7 | 0xCF | 0xD3 | 0xD7 | 0xDB | 0xDF => self.dcp(),
-            0xE3 | 0xE7 | 0xEF | 0xF3 | 0xF7 | 0xFB | 0xFF => self.isc(),
-            0x03 | 0x07 | 0x0F | 0x13 | 0x17 | 0x1B | 0x1F => self.slo(),
-            0x23 | 0x27 | 0x2F | 0x33 | 0x37 | 0x3B | 0x3F => self.rla(),
-            0x43 | 0x47 | 0x4F | 0x53 | 0x57 | 0x5B | 0x5F => self.sre(),
-            0x63 | 0x67 | 0x6F | 0x73 | 0x77 | 0x7B | 0x7F => self.rra(),
-            0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(),
-            0x24 | 0x2C => self.bit(),
-            0x68 => self.pla(),
-            0x28 => self.plp(),
-            0x38 => self.sec(),
-            0x48 => self.pha(),
-            0x78 => self.sei(),
-            0x88 => self.dey(),
-            0x8A => self.txa(),
-            0x98 => self.tya(),
-            0x9A => self.txs(),
-            0xAA => self.tax(),
-            0xA8 => self.tay(),
-            0xBA => self.tsx(),
-            0xCA => self.dex(),
-            0xC8 => self.iny(),
-            0xD8 => self.cld(),
-            0xE8 => self.inx(),
-            0xB8 => self.clv(),
-            0xF8 => self.sed(),
-            0x20 => { self.jsr(); return },
-            0x10 => { self.bpl(); return },
-            0x30 => { self.bmi(); return },
-            0x50 => { self.bvc(); return },
-            0x70 => { self.bvs(); return },
-            0xB0 => { self.bcs(); return },
-            0x90 => { self.bcc(); return },
-            0xF0 => { self.beq(); return },
-            0xD0 => { self.bne(); return },
-            0x40 => { self.rti(); return },
-            0x60 => { self.rts(); return },
-            0x18 => self.clc(),
-            _ => panic!( "Hey you haven't implemented {}", name!(self)),
+            0x08 => self.php(), 
+            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(), 
+            0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.cmp(), 
+            0x4C | 0x6C => { self.jmp(); return }, 
+            0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(), 
+            0xA3 | 0xA7 | 0xAF | 0xB3 | 0xB7 | 0xBF => self.lax(), 
+            0x83 | 0x87 | 0x8F | 0x97 => self.sax(), 
+            0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(), 
+            0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(), 
+            0x84 | 0x94 | 0x8C => self.sty(), 
+            0x86 | 0x96 | 0x8E => self.stx(), 
+            0x04 | 0x0C | 0x14 | 0x1C | 0x34 | 0x3C | 0x44 | 0x80 | 0x54 | 0x5C | 0x7C | 0xDC | 0xFC | 0x64 | 0x74 | 0xD4 | 0xF4 | 0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => self.nop(), 
+            0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(), 
+            0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(), 
+            0xC0 | 0xC4 | 0xCC => self.cpy(), 
+            0xE0 | 0xE4 | 0xEC => self.cpx(), 
+            0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(), 
+            0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(), 
+            0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 | 0xEB => self.sbc(), 
+            0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(), 
+            0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(), 
+            0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(), 
+            0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(), 
+            0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(), 
+            0xC3 | 0xC7 | 0xCF | 0xD3 | 0xD7 | 0xDB | 0xDF => self.dcp(), 
+            0xE3 | 0xE7 | 0xEF | 0xF3 | 0xF7 | 0xFB | 0xFF => self.isc(), 
+            0x03 | 0x07 | 0x0F | 0x13 | 0x17 | 0x1B | 0x1F => self.slo(), 
+            0x23 | 0x27 | 0x2F | 0x33 | 0x37 | 0x3B | 0x3F => self.rla(), 
+            0x43 | 0x47 | 0x4F | 0x53 | 0x57 | 0x5B | 0x5F => self.sre(), 
+            0x63 | 0x67 | 0x6F | 0x73 | 0x77 | 0x7B | 0x7F => self.rra(), 
+            0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(), 
+            0x24 | 0x2C => self.bit(), 
+            0x68 => self.pla(), 0x28 => self.plp(), 0x48 => self.pha(), 
+            0x38 => self.sec(), 0x78 => self.sei(), 0xF8 => self.sed(), 
+            0x88 => self.dey(), 0xCA => self.dex(), 
+            0x8A => self.txa(), 0x98 => self.tya(), 0x9A => self.txs(), 0xAA => self.tax(), 0xA8 => self.tay(), 0xBA => self.tsx(), 
+            0xC8 => self.iny(), 0xE8 => self.inx(), 
+            0xD8 => self.cld(), 0xB8 => self.clv(), 
+            0x20 => { self.jsr(); return }, 
+            0x10 => { self.bpl(); return }, 0x30 => { self.bmi(); return }, 
+            0x50 => { self.bvc(); return }, 0x70 => { self.bvs(); return }, 
+            0xB0 => { self.bcs(); return }, 0x90 => { self.bcc(); return }, 
+            0xF0 => { self.beq(); return }, 0xD0 => { self.bne(); return }, 
+            0x40 => { self.rti(); return }, 0x60 => { self.rts(); return }, 
+            0x18 => self.clc(), 
+            _ => panic!( "Hey you haven't implemented {}", name!(self)), 
         }
         self.next_pc();
     }
     
     fn data_fetch(&mut self, get_data : bool ) -> u16 {
-        let addressing_mode = ADDRESSING_MODE[ self.memory[ self.pc as usize ] as usize ];
+        let addressing_mode = ADDRESSING_MODE[ self.memory.read( self.pc as usize ) as usize ];
         match addressing_mode {
-            0 => return 0,
-            1 => return memAt!( self, self.pc+1 ),
-            2 => { if get_data { self.cycles += 1; return memAt!( self, self.pc+1, 0 ) } else { return memAt!( self, self.pc+1 ) } }, 
-            3 => { if get_data { self.cycles += 2; return memAtZp!( self, self.pc+1, self.regs.x ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF } }, 
-            4 => { if get_data { self.cycles += 2; return memAtZp!( self, self.pc+1, self.regs.y ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF } },
+            0 => return 0, 
+            1 => return self.memory.load( self.pc as usize + 1 ), 
+            2 => { if get_data { self.cycles += 1; return self.memory.load( memAt!( self, self.pc + 1 ) as usize ) } else { return memAt!( self, self.pc+1 ) } }, 
+            3 => { if get_data { self.cycles += 2; return self.memory.load( ((memAt!( self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF ) as usize ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF } }, 
+            4 => { if get_data { self.cycles += 2; return self.memory.load( ((memAt!( self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF ) as usize ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF } }, 
             5 => { let address = composeAddress!( memAtZp!( self, self.pc + 1, self.regs.x + 1 ), memAtZp!( self, self.pc+1, self.regs.x ) );
-                   if get_data { self.cycles += 4; return memAt!( self, address ) } else { return address } },
+                   if get_data { self.cycles += 4; return self.memory.load( address as usize ) } else { return address } }, 
             6 => { let address = composeAddress!( memAtZp!( self, self.pc+1, 1 ), memAt!( self, self.pc+1, 0) );
                    let address2 = ovop!( +=, u16, address, self.regs.y as u16 );
                    if get_data { self.cycles += if ( memAt!(self, self.pc+1, 0) + self.regs.y as u16 ) & 0x100 == 0x100 { 4 } else { 3 };
-                        return memAt!( self, address2 ) } else { return address2 } },
+                        return self.memory.load( address2 as usize ) } else { return address2 } }, 
             7 => { let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
-                   if get_data { self.cycles += 2; return memAt!( self, address ) } else { return address } },
+                   if get_data { self.cycles += 2; return self.memory.load( address as usize ) } else { return address } }, 
             8 => { let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = ovop!( +=, u16, address, self.regs.x as u16 );
                     if get_data { let opcode = memAt!(self, self.pc );
-                        let shifts = opcode == 0x5E || opcode == 0x1E || memAt!( self, self.pc ) == 0x7E || opcode == 0x3E || opcode == 0xFE || 
-                            opcode == 0xDE || opcode == 0xDF || opcode == 0xFF || opcode == 0x1F || opcode == 0x3F || opcode ==0x5F || opcode == 0x7F;
+                        let shifts = match opcode{ 0x5E | 0x1E | 0x7E | 0x3E | 0xFE | 0xDE | 0xDF | 0xFF | 0x1F | 0x3F | 0x5F | 0x7F => true, _=> false };
                         self.cycles += if (memAt!(self, self.pc+1) + self.regs.x as u16 ) & 0x100 == 0x100 || shifts { 3 } else { 2 };
-                        return memAt!( self, address2 ) } else { return address2 } },
+                        return self.memory.load( address2 as usize ) } else { return address2 } }, 
             9 => { let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = ovop!( +=, u16, address, self.regs.y as u16 );
                     if get_data { self.cycles += if (memAt!(self, self.pc+1) + self.regs.y as u16 ) & 0x100 == 0x100 { 3 } else { 2 };
-                        return memAt!( self, address2 ) } else { return address2 } },
+                        return self.memory.load( address2 as usize ) } else { return address2 } }, 
             10 => { let address1 = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = address1 & 0xFF00 | (address1+1) & 0x00FF;
-                    self.cycles += 4; return composeAddress!( memAt!( self, address2 ), memAt!( self, address1 ) ) },
-            11 => return memAt!( self, self.pc + 1 ),
-            12 => { self.cycles += 1; return memAt!( self, self.pc + 1 ) },
-            13 => { self.cycles += 2; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) )},
-            14 => { self.cycles += 3; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) )  + self.regs.x as u16 },
-            15 => { self.cycles += 3; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ) + self.regs.y as u16 },
-            16 => { self.cycles += 2; return ( memAt!( self, self.pc + 1 ) + self.regs.x as u16 ) & 0x00FF },
-            17 => { self.cycles += 2; return ( memAt!( self, self.pc + 1 ) + self.regs.y as u16 ) & 0x00FF },
-            18 => { self.cycles += 4; return composeAddress!( memAtZp!( self, self.pc +1, self.regs.x+1), memAtZp!( self, self.pc+1,self.regs.x ) ) },
-            19 => { self.cycles += 4; return composeAddress!( memAtZp!( self, self.pc +1, 1), memAt!( self, self.pc+1, 0 ) ) + self.regs.y as u16 },
-            _ => return 0,
+                    self.cycles += 4; return composeAddress!( memAt!( self, address2 ), memAt!( self, address1 ) ) }, 
+            11 => return memAt!( self, self.pc + 1 ), 
+            12 => { self.cycles += 1; return memAt!( self, self.pc + 1 ) }, 
+            13 => { self.cycles += 2; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) )}, 
+            14 => { self.cycles += 3; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ) + self.regs.x as u16 }, 
+            15 => { self.cycles += 3; return composeAddress!( memAt!( self, self.pc + 2 ), memAt!( self, self.pc+ 1 ) ) + self.regs.y as u16 }, 
+            16 => { self.cycles += 2; return ( memAt!( self, self.pc + 1 ) + self.regs.x as u16 ) & 0x00FF }, 
+            17 => { self.cycles += 2; return ( memAt!( self, self.pc + 1 ) + self.regs.y as u16 ) & 0x00FF }, 
+            18 => { self.cycles += 4; return composeAddress!( memAtZp!( self, self.pc +1, self.regs.x+1), memAtZp!( self, self.pc+1, self.regs.x ) ) }, 
+            19 => { self.cycles += 4; return composeAddress!( memAtZp!( self, self.pc +1, 1), memAt!( self, self.pc+1, 0 ) ) + self.regs.y as u16 }, 
+            _ => return 0, 
         }
     }
 
@@ -580,19 +563,19 @@ impl<'mem> CPU<'mem> {
 
     fn stx( &mut self ) {
         let memory_address = self.data_fetch(true) as usize;
-        self.memory[ memory_address ] = self.regs.x;
+        self.memory.store( memory_address, self.regs.x );
         self.cycles += 2;
     }
 
     fn sty( &mut self ) {
         let memory_address = self.data_fetch(true) as usize;
-        self.memory[ memory_address ] = self.regs.y;
+        self.memory.store( memory_address , self.regs.y );
         self.cycles += 2;
     }
 
     fn sta( &mut self ) {
         let memory_address = self.data_fetch(true) as usize;
-        self.memory[ memory_address ] = self.regs.a;
+        self.memory.store( memory_address, self.regs.a );
         self.cycles += 2;
     }
 
@@ -601,8 +584,8 @@ impl<'mem> CPU<'mem> {
         let current_pc = self.pc;
         let address1 = ( 0x100 | self.regs.s as u16 ) as usize;
         let address2 = ( 0x100 | ( self.regs.s - 1 ) as u16 ) as usize;
-        self.memory[ address1 ] = ( next_pc >> 8 ) as u8;
-        self.memory[ address2 ] = ( next_pc & 0x00FF ) as u8;
+        self.memory.store( address1 , ( next_pc >> 8 ) as u8 );
+        self.memory.store( address2 , ( next_pc & 0x00FF ) as u8 );
         self.regs.s = self.regs.s - 2;
         self.pc = composeData!( self, current_pc + 2, current_pc + 1 );
         self.cycles += 6;
@@ -611,14 +594,14 @@ impl<'mem> CPU<'mem> {
     fn nop( &mut self ) {
         let which_one = memAt!(self, self.pc);
         match which_one {
-            0x80 | 0x82 | 0xC2 | 0xE2 | 0xEA | 0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => self.cycles += 2,
-            0x04 | 0x44 | 0x64  => self.cycles += 3,
-            0x0C | 0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4  => self.cycles += 4,
+            0x80 | 0x82 | 0xC2 | 0xE2 | 0xEA | 0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => self.cycles += 2, 
+            0x04 | 0x44 | 0x64  => self.cycles += 3, 
+            0x0C | 0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4  => self.cycles += 4, 
             0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
                 self.cycles += if ( memAt!( self, self.pc+2 ) + self.regs.x as u16 ) & 0x100 == 0x100 { 1 } else { 0 };
                 self.cycles += 4
-            },
-            _ => panic!("How did I end here {:x}", which_one ),
+            }, 
+            _ => panic!("How did I end here {:x}", which_one ), 
         }
     }
 
@@ -698,13 +681,13 @@ impl<'mem> CPU<'mem> {
 
     fn php( &mut self ) {
         let p_int = self.regs.p.to_int();
-        self.memory[ ( 0x100 | self.regs.s as u16 ) as usize ] = ( p_int | 0x1 << 4 ) as u8;
+        self.memory.store( ( 0x100 | self.regs.s as u16 ) as usize , ( p_int | 0x1 << 4 ) as u8 );
         self.regs.s -= 1;
         self.cycles += 3;
     }
 
     fn pha( &mut self ) {
-        self.memory[ 0x100 | (self.regs.s as u16) as usize ] = self.regs.a;
+        self.memory.store( 0x100 | (self.regs.s as u16) as usize , self.regs.a );
         self.regs.s -= 1;
         self.cycles += 3;
     }
@@ -854,7 +837,7 @@ impl<'mem> CPU<'mem> {
 
             let shifted_data = ( data as u8 ) >> 1;
             set_zn!(self, shifted_data);
-            self.memory[ address as usize ] = shifted_data;
+            self.memory.store( address as usize, shifted_data);
             self.cycles += 4;
         }
     }
@@ -873,7 +856,7 @@ impl<'mem> CPU<'mem> {
 
             let shifted_data = ( data as u8 ) << 1;
             set_zn!(self, shifted_data );
-            self.memory[ address as usize ] = shifted_data;
+            self.memory.store( address as usize, shifted_data);
             self.cycles += 4;
         }
     }
@@ -920,7 +903,7 @@ impl<'mem> CPU<'mem> {
             self.regs.p.carry = value & 0x1;
             let shifted_data = value >> 1 | old_p << 7;
             set_zn!( self, shifted_data );
-            self.memory[ address as usize ] = shifted_data;
+            self.memory.store( address as usize, shifted_data);
             self.cycles += 4;
         }
     }
@@ -940,7 +923,7 @@ impl<'mem> CPU<'mem> {
             self.regs.p.carry = if value & 0x80 == 0x80 { 1 } else { 0 };
             let shifted_data = value << 1 | old_p;
             set_zn!( self, shifted_data );
-            self.memory[ address as usize ] = shifted_data;
+            self.memory.store( address as usize, shifted_data);
             self.cycles += 4;
         }
     }
@@ -950,7 +933,7 @@ impl<'mem> CPU<'mem> {
         let address = self.data_fetch(false);
         value = ovop!( +=, u8, value, 1 );
         set_zn!( self, value );
-        self.memory[ address as usize ] = value;
+        self.memory.store( address as usize, value);
         self.cycles += 4;
     }
 
@@ -959,7 +942,7 @@ impl<'mem> CPU<'mem> {
         let address = self.data_fetch(false);
         value = ovop!( -=, u8, value, 1 );
         set_zn!( self, value );
-        self.memory[ address as usize ] = value;
+        self.memory.store( address as usize, value);
         self.cycles += 4;
     }
 
@@ -973,7 +956,7 @@ impl<'mem> CPU<'mem> {
 
     fn sax( &mut self ) {
         let address = self.data_fetch(true);
-        self.memory[ address as usize ] = self.regs.a & self.regs.x;
+        self.memory.store( address as usize, self.regs.a & self.regs.x);
         self.cycles += 2;
     }
 
@@ -984,7 +967,7 @@ impl<'mem> CPU<'mem> {
         self.regs.p.carry = if self.regs.a >= new_val { 1 } else { 0 };
         self.regs.p.zero = if self.regs.a == new_val { 1 } else { 0 };
         self.regs.p.negative = if self.regs.a & ( ovop!( -=, u8, self.regs.a, new_val ) ) & 0x80 == 0x80 { 1 } else { 0 };
-        self.memory[ address as usize ] = new_val;
+        self.memory.store( address as usize, new_val);
         self.cycles += 4;
     }
 
@@ -998,7 +981,7 @@ impl<'mem> CPU<'mem> {
         self.regs.p.overflow = overflowsbc!( self.regs.a, new_val, temp as u8 );
         self.regs.p.carry = if temp & 0x100 == 0x100 { 0 } else { 1 };
         self.regs.a = temp as u8;
-        self.memory[ address as usize ] = new_val;
+        self.memory.store( address as usize, new_val);
         self.cycles += 4;
     }
 
@@ -1009,7 +992,7 @@ impl<'mem> CPU<'mem> {
         let shifted_data = data << 1;
         self.regs.a = shifted_data | self.regs.a;
         set_zn!(self, self.regs.a);
-        self.memory[ address ] = shifted_data;
+        self.memory.store( address, shifted_data);
         self.cycles += 4;
     }
 
@@ -1021,7 +1004,7 @@ impl<'mem> CPU<'mem> {
         let shifted_data = data << 1 | old_p;
         self.regs.a = self.regs.a & shifted_data;
         set_zn!(self, self.regs.a );
-        self.memory[ address ] = shifted_data;
+        self.memory.store( address, shifted_data);
         self.cycles += 4;
     }
 
@@ -1032,7 +1015,7 @@ impl<'mem> CPU<'mem> {
         let shifted_data = data >> 1;
         self.regs.a = self.regs.a ^ shifted_data;
         set_zn!(self, self.regs.a );
-        self.memory[ address ] = shifted_data;
+        self.memory.store( address, shifted_data);
         self.cycles += 4;
     }
 
@@ -1047,28 +1030,28 @@ impl<'mem> CPU<'mem> {
         self.regs.p.overflow = overflow!( self.regs.a, shifted_data, temp as u8 );
         self.regs.p.carry = if temp & 0x100 == 0x100 { 1 } else  { 0 };
         self.regs.a = temp as u8;
-        self.memory[ address ] = shifted_data;
+        self.memory.store( address, shifted_data);
         self.cycles += 4;
     }
 }    
 
 impl<'mem> fmt::Display for CPU<'mem> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let addressing_mode = ADDRESSING_MODE[self.memory[ self.pc as usize ] as usize ];
+        let addressing_mode = ADDRESSING_MODE[self.memory.read( self.pc as usize ) as usize ];
         match addressing_mode {
-            0 => write!(f, "[{:x}]{} {} \t", self.pc, self.regs, name!(self)),
-            1 => write!(f, "[{:x}]{} {} #{:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-            2 | 12 => write!(f, "[{:x}]{} {} ${:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-            3 | 16 => write!(f, "[{:x}]{} {} ${:x},X\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-            4 | 17 => write!(f, "[{:x}]{} {} ${:x},Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-            5 | 18 => write!(f, "[{:x}]{} {} (${:x}),X \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-            6 | 19 => write!(f, "[{:x}]{} {} (${:x}),Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-            7 | 13=> write!(f, "[{:x}]{} {} ${:x}{:x}\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-            8 | 14 => write!(f, "[{:x}]{} {} {:x}{:x}, X\t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-            9 | 15 => write!(f, "[{:x}]{} {} {:x}{:x}, Y \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-            10 => write!(f, "[{:x}]{} {} $({:x}{:x}) \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 2], self.memory[self.pc as usize + 1]),
-            11 => write!(f, "[{:x}]{} {} {:x} \t", self.pc, self.regs, name!(self), self.memory[self.pc as usize + 1]),
-            _ => write!(f, "Specified wrong format"),
+            0 => write!(f, "[{:x}]{} {} \t", self.pc, self.regs, name!(self)), 
+            1 => write!(f, "[{:x}]{} {} #{:x}\t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 1)), 
+            2 | 12 => write!(f, "[{:x}]{} {} ${:x}\t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 1)), 
+            3 | 16 => write!(f, "[{:x}]{} {} ${:x}, X\t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 1)), 
+            4 | 17 => write!(f, "[{:x}]{} {} ${:x}, Y \t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 1)), 
+            5 | 18 => write!(f, "[{:x}]{} {} (${:x}), X \t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 1)), 
+            6 | 19 => write!(f, "[{:x}]{} {} (${:x}), Y \t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 1)), 
+            7 | 13=> write!(f, "[{:x}]{} {} ${:x}{:x}\t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 2), self.memory.read(self.pc as usize + 1)), 
+            8 | 14 => write!(f, "[{:x}]{} {} {:x}{:x}, X\t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 2), self.memory.read(self.pc as usize + 1)), 
+            9 | 15 => write!(f, "[{:x}]{} {} {:x}{:x}, Y \t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 2), self.memory.read(self.pc as usize + 1)), 
+            10 => write!(f, "[{:x}]{} {} $({:x}{:x}) \t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 2), self.memory.read(self.pc as usize + 1)), 
+            11 => write!(f, "[{:x}]{} {} {:x} \t", self.pc, self.regs, name!(self), self.memory.read(self.pc as usize + 1)), 
+            _ => write!(f, "Specified wrong format"), 
         }
     }
 }

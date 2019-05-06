@@ -497,27 +497,54 @@ impl<'mem> CPU<'mem> {
         match addressing_mode {
             0 => return 0, 
             1 => return self.memory.load( self.pc as usize + 1 ), 
-            2 => { if get_data { self.cycles += 1; return self.memory.load( memAt!( self, self.pc + 1 ) as usize ) } else { return memAt!( self, self.pc+1 ) } }, 
-            3 => { if get_data { self.cycles += 2; return self.memory.load( ((memAt!( self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF ) as usize ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF } }, 
-            4 => { if get_data { self.cycles += 2; return self.memory.load( ((memAt!( self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF ) as usize ) } else { return ( memAt!(self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF } }, 
+
+            2 => { if get_data { 
+                        self.cycles += 1; 
+                        return self.memory.load( memAt!( self, self.pc + 1 ) as usize ) } 
+                   else { return memAt!( self, self.pc+1 ) } }, 
+
+            3 => { if get_data { 
+                        self.cycles += 2;
+                        return self.memory.load( ((memAt!( self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF ) as usize ) } 
+                   else { return ( memAt!(self, self.pc+1 ) + self.regs.x as u16 ) & 0x00FF } }, 
+
+            4 => { if get_data {
+                        self.cycles += 2;
+                        return self.memory.load( ((memAt!( self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF ) as usize ) } 
+                   else { return ( memAt!(self, self.pc+1 ) + self.regs.y as u16 ) & 0x00FF } }, 
+
             5 => { let address = composeAddress!( memAtZp!( self, self.pc + 1, self.regs.x + 1 ), memAtZp!( self, self.pc+1, self.regs.x ) );
                    if get_data { self.cycles += 4; return self.memory.load( address as usize ) } else { return address } }, 
+
             6 => { let address = composeAddress!( memAtZp!( self, self.pc+1, 1 ), memAt!( self, self.pc+1, 0) );
                    let address2 = ovop!( +=, u16, address, self.regs.y as u16 );
-                   if get_data { self.cycles += if ( memAt!(self, self.pc+1, 0) + self.regs.y as u16 ) & 0x100 == 0x100 { 4 } else { 3 };
-                        return self.memory.load( address2 as usize ) } else { return address2 } }, 
+                   if get_data { 
+                        self.cycles += if ( memAt!(self, self.pc+1, 0) + self.regs.y as u16 ) & 0x100 == 0x100 { 4 } else { 3 };
+                        return self.memory.load( address2 as usize ) } 
+                   else { return address2 } }, 
+
             7 => { let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
-                   if get_data { self.cycles += 2; return self.memory.load( address as usize ) } else { return address } }, 
+                   if get_data { 
+                       self.cycles += 2;
+                       return self.memory.load( address as usize ) } 
+                   else { return address } }, 
+
             8 => { let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = ovop!( +=, u16, address, self.regs.x as u16 );
-                    if get_data { let opcode = memAt!(self, self.pc );
+                    if get_data { 
+                        let opcode = memAt!(self, self.pc );
                         let shifts = match opcode{ 0x5E | 0x1E | 0x7E | 0x3E | 0xFE | 0xDE | 0xDF | 0xFF | 0x1F | 0x3F | 0x5F | 0x7F => true, _=> false };
                         self.cycles += if (memAt!(self, self.pc+1) + self.regs.x as u16 ) & 0x100 == 0x100 || shifts { 3 } else { 2 };
-                        return self.memory.load( address2 as usize ) } else { return address2 } }, 
-            9 => { let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
+                        return self.memory.load( address2 as usize ) } 
+                    else { return address2 } }, 
+
+            9 => {  let address = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = ovop!( +=, u16, address, self.regs.y as u16 );
-                    if get_data { self.cycles += if (memAt!(self, self.pc+1) + self.regs.y as u16 ) & 0x100 == 0x100 { 3 } else { 2 };
-                        return self.memory.load( address2 as usize ) } else { return address2 } }, 
+                    if get_data { 
+                        self.cycles += if (memAt!(self, self.pc+1) + self.regs.y as u16 ) & 0x100 == 0x100 { 3 } else { 2 };
+                        return self.memory.load( address2 as usize ) } 
+                    else { return address2 } }, 
+
             10 => { let address1 = composeAddress!( memAt!( self, self.pc+2 ), memAt!( self, self.pc+1 ) );
                     let address2 = address1 & 0xFF00 | (address1+1) & 0x00FF;
                     self.cycles += 4; return composeAddress!( memAt!( self, address2 ), memAt!( self, address1 ) ) }, 
